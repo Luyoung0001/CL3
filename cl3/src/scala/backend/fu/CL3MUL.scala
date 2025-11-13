@@ -29,8 +29,8 @@ class CL3MUL extends Module {
   val en = io.in.info.valid && !io.in.hold
 
   val func3_e1_q = RegEnable(func3, en)
-  val ra_q       = RegEnable(io.in.info.ra, en)
-  val rb_q       = RegEnable(io.in.info.rb, en)
+  val ra_q       = RegEnable(io.in.info.rs1, en)
+  val rb_q       = RegEnable(io.in.info.rs2, en)
   val func3_e2_q = RegNext(func3_e1_q)
 
   val signext           = SignExt(_: UInt, 33)

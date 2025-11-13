@@ -3,14 +3,16 @@ package cl3
 import chisel3._
 import chisel3.util._
 
-class PipeInput extends Bundle {
+class PipeInput() extends Bundle {
 
   val issue = new PipeISInput
   val lsu   = new PipeLSUInput
-  val exu   = new PipeEXUInput
+  val exu   = Vec(2, new PipeEXUInput)
   val div   = new PipeDIVInput
   val mul   = new PipeMULInput
   val csr   = new PipeCSRInput
+
+  val pipe = Flipped(new PipeOutput)
 
   val irq     = Input(Bool())
   val flush   = Input(Bool())
@@ -32,14 +34,14 @@ class PipeIO extends Bundle {
   val out = new PipeOutput
 }
 
-class CL3Pipe() extends Module {
+class CL3Pipe(pipeID: Int) extends Module {
 
   val io = IO(new PipeIO)
 
   val e1_q = RegInit(0.U.asTypeOf(new PipeInfo))
 
-  val e1_flush = io.in.flush || io.out.flush //TODO:
-  val e1_stall = io.in.stall //TODO:
+  val e1_flush = io.in.flush || io.out.flush // TODO:
+  val e1_stall = io.in.stall                 // TODO:
 
   when(e1_flush && !e1_stall) {
     e1_q.valid := false.B
@@ -48,53 +50,97 @@ class CL3Pipe() extends Module {
   }
 
   when(io.in.issue.fire && !e1_flush && !e1_stall) {
-    e1_q.info   := io.in.issue.info
+    e1_q.info      := io.in.issue.info
     // TODO: support RVC
-    e1_q.npc    := Mux(io.in.exu.br.valid, io.in.exu.br.pc, io.in.issue.info.pc + 4.U)
-    e1_q.ra     := io.in.issue.ra
-    e1_q.rb     := io.in.issue.rb
-    e1_q.except := io.in.issue.except
+    e1_q.npc       := Mux(io.in.exu(0).br.valid, io.in.exu(0).br.pc, io.in.issue.info.pc + 4.U)
+    e1_q.rs1       := io.in.issue.rs1
+    e1_q.rs2       := io.in.issue.rs2
+    e1_q.rs1_id    := io.in.issue.rs1_id
+    e1_q.rs2_id    := io.in.issue.rs2_id
+    e1_q.rdy_stage := io.in.issue.rdy_stage
+    e1_q.except    := io.in.issue.except
   }
 
   io.out.e1        := e1_q
-  io.out.e1.result := io.in.exu.result
+  io.out.e1.valid  := e1_q.valid
+  io.out.e1.result := io.in.exu(0).result
 
-  val e2_q = RegInit(0.U.asTypeOf(new PipeInfo)) 
+  def getBypassResult(id: UInt, default: UInt): UInt = {
+    if (pipeID == 0) {
+      MuxLookup(id, default)(
+        Seq(
+          2.U -> io.out.e2.result,
+          3.U -> io.in.pipe.e2.result,
+          4.U -> io.out.wb.result,
+          5.U -> io.in.pipe.wb.result
+        )
+      )
+    } else {
+      MuxLookup(id, default)(
+        Seq(
+          1.U -> io.in.pipe.e1.result,
+          2.U -> io.in.pipe.e2.result,
+          3.U -> io.out.e2.result,
+          4.U -> io.in.pipe.wb.result,
+          5.U -> io.out.wb.result
+        )
+      )
+    }
+  }
 
-  val e2_flush = io.in.flush || io.out.flush //TODO:
-  val e2_stall = io.in.stall //TODO:
+  io.out.e1.rs1 := getBypassResult(e1_q.rs1_id, e1_q.rs1)
+  io.out.e1.rs2 := getBypassResult(e1_q.rs2_id, e1_q.rs2)
+
+  val e2_q = RegInit(0.U.asTypeOf(new PipeInfo))
+
+  val e2_flush = io.in.flush || io.out.flush // TODO:
+  val e2_stall = io.in.stall                 // TODO:
 
   when(e2_flush && !io.in.stall) {
     e2_q.valid := false.B
   }.elsewhen(!io.in.stall) {
-    e2_q       := e1_q
-    e2_q.result := MuxCase(io.in.exu.result, Seq(
-      e1_q.info.isDIV -> io.in.div.result,
-      e1_q.info.isCSR -> io.in.csr.rdata))
+    e2_q        := e1_q
+    e2_q.result := MuxCase(
+      io.in.exu(0).result,
+      Seq(
+        e1_q.info.isDIV -> io.in.div.result,
+        e1_q.info.isCSR -> io.in.csr.rdata
+      )
+    )
   }
-  
-  io.out.e2 := e2_q
-  io.out.e2.info.wen := !(io.in.stall || io.out.stall) && e2_q.info.wen
-  io.out.e2.result := MuxCase(
+
+  io.out.e2          := e2_q
+  io.out.e2.info.wen := !(io.in.stall || io.out.stall) && e2_q.info.wen // TODO:
+  io.out.e2.result   := MuxCase(
     e2_q.result,
     Seq(
-      io.out.e2.isLd  -> io.in.lsu.rdata,
-      io.out.e2.isMul -> io.in.mul.result
+      io.out.e2.isLd    -> io.in.lsu.rdata,
+      io.out.e2.isMul   -> io.in.mul.result,
+      e2_q.rdy_stage(0) -> io.in.exu(1).result
     )
   )
 
-  io.out.stall := e1_q.valid && e1_q.info.isDIV && !io.in.div.valid ||
-    e2_q.valid && e2_q.info.isLSU && !io.in.lsu.valid
-  io.out.flush := false.B // TODO: add exception
-
-  val wb_q   = RegInit(0.U.asTypeOf(new PipeInfo))
+  val wb_q = RegInit(0.U.asTypeOf(new PipeInfo))
 
   when(!io.in.stall) {
-    wb_q := e2_q
-    wb_q.result    := io.out.e2.result
+    wb_q               := e2_q
+    wb_q.result        := io.out.e2.result
     wb_q.mem.cacheable := Mux(e2_q.isMem, io.in.lsu.cacheable, true.B)
   }
-
   wb_q.valid := e2_q.valid && !io.in.stall && !io.in.flushWB
-  io.out.wb := wb_q
+
+  io.out.wb               := wb_q
+  io.out.wb.result        := MuxCase(
+    wb_q.result,
+    Seq(
+      (io.out.wb.isLd && wb_q.rdy_stage(1))  -> io.in.lsu.rdata,
+      (io.out.wb.isMul && wb_q.rdy_stage(1)) -> io.in.mul.result
+    )
+  )
+  io.out.wb.mem.cacheable := Mux(wb_q.rdy_stage(1), io.in.lsu.cacheable, wb_q.mem.cacheable)
+
+  io.out.stall := e1_q.valid && e1_q.info.isDIV && !io.in.div.valid ||
+    e2_q.valid && e2_q.info.isLSU && e2_q.rdy_stage(0) && !io.in.lsu.valid ||
+    wb_q.valid && wb_q.info.isLSU && wb_q.rdy_stage(1) && !io.in.lsu.valid
+  io.out.flush := false.B // TODO: add exception
 }

@@ -146,3 +146,15 @@ trait AXIConstant {
 }
 
 object AXIConstant extends AXIConstant {}
+
+trait PipeConstant {
+  val P0_E1 = "b000".U(3.W)
+  val P0_E2 = "b010".U(3.W)
+  val P0_WB = "b100".U(3.W)
+  val P1_E1 = "b001".U(3.W)
+  val P1_E2 = "b011".U(3.W)
+  val P1_WB = "b101".U(3.W)
+  val NONE  = "b111".U(3.W)
+}
+
+object PipeConstant extends PipeConstant {}

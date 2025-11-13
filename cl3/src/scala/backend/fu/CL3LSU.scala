@@ -6,8 +6,9 @@ import chisel3.util.experimental.decode._
 import cl3.CL3InstInfo._
 
 class LSUInput extends Bundle {
-  val info = Input(new OpInfo)
-  val mem  = Flipped(Valid(new CL3DCacheResp))
+  val info  = Input(new OpInfo)
+  val mem   = Flipped(Valid(new CL3DCacheResp))
+  val flush = Input(Bool())
 }
 
 class LSUOutput extends Bundle {
@@ -38,7 +39,7 @@ class CL3LSU extends Module with LSUConstant {
   val is_load  = !op(LSU_LS_BIT)
   val is_store = op(LSU_LS_BIT)
 
-  val addr = io.in.info.ra + Mux(is_load, Iimm, Simm)
+  val addr = io.in.info.rs1 + Mux(is_load, Iimm, Simm)
 
   // TODO: refactor MuxLookup to improve timing
   val mask = MuxLookup(addr(1, 0) ## op(2, 1), MASK_Z)(
@@ -72,14 +73,16 @@ class CL3LSU extends Module with LSUConstant {
   val op_q        = RegInit(0.U(4.W))
   val req_valid_q = RegInit(false.B)
 
-  when(io.in.info.valid && !(io.out.mem.valid && !io.out.mem.ready)) {
+  when(io.in.flush) {
+    req_valid_q := false.B
+  }.elsewhen(io.in.info.valid && !(io.out.mem.valid && !io.out.mem.ready)) {
     req_valid_q := true.B
 
     req_q.addr      := addr
-    req_q.wdata     := io.in.info.rb
+    req_q.wdata     := io.in.info.rs2
     req_q.wen       := is_store
     req_q.mask      := mask
-    req_q.cacheable := addr(31) //TODO:
+    req_q.cacheable := addr(31) // TODO:
 
     op_q := op
 
@@ -87,7 +90,7 @@ class CL3LSU extends Module with LSUConstant {
     req_valid_q := false.B
   }
 
-  io.out.mem.valid      := req_valid_q && !pending
+  io.out.mem.valid      := req_valid_q && !pending && !io.in.flush
   io.out.mem.bits       := req_q
   // TODO: refactor MuxLookup to improve timing
   io.out.mem.bits.wdata := MuxLookup(req_q.mask, req_q.wdata)(
@@ -100,15 +103,15 @@ class CL3LSU extends Module with LSUConstant {
   )
 
   class ReqRecord extends Bundle {
-    val mask = UInt(4.W)
-    val op   = UInt(4.W)
+    val mask      = UInt(4.W)
+    val op        = UInt(4.W)
     val cacheable = Bool()
   }
 
   val req_record_q = RegInit(0.U.asTypeOf(new ReqRecord))
   when(io.out.mem.fire) {
-    req_record_q.mask := req_q.mask
-    req_record_q.op   := op_q
+    req_record_q.mask      := req_q.mask
+    req_record_q.op        := op_q
     req_record_q.cacheable := req_q.cacheable
   }
 
@@ -134,9 +137,9 @@ class CL3LSU extends Module with LSUConstant {
     )
   )
 
-  io.out.info.valid  := io.in.mem.valid && outstanding_q
-  io.out.info.except := 0.U // TODO:
-  io.out.info.stall  := pending || io.out.mem.valid && !io.out.mem.ready
+  io.out.info.valid     := io.in.mem.valid && outstanding_q
+  io.out.info.except    := 0.U // TODO:
+  io.out.info.stall     := pending || io.out.mem.valid && !io.out.mem.ready
   io.out.info.cacheable := req_record_q.cacheable
 
 }

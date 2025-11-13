@@ -141,7 +141,8 @@ class CL3Fetch() extends Module with CL3Config {
   io.mem.req.bits.cacheable  := true.B // TODO:
   io.mem.req.bits.size       := 3.U
   io.mem.req.bits.wen        := false.B
-  io.mem.req.bits.addr       := Cat(icache_pc(31, 3), 0.U(3.W))
+  // io.mem.req.bits.addr       := Cat(icache_pc(31, 3), 0.U(3.W))
+  io.mem.req.bits.addr       := icache_pc
   io.mem.req.bits.flush      := io.flush || flush_q
   io.mem.req.bits.invalidate := false.B
 
@@ -158,7 +159,8 @@ class CL3Fetch() extends Module with CL3Config {
 
   val fetch_valid = io.mem.resp.valid && !drop_resp
   val skid_valid  = skid_valid_q && !drop_resp
-  val fetch_pc    = Cat(last_pc_q(31, 3), 0.U(3.W))
+  // val fetch_pc    = Cat(last_pc_q(31, 3), 0.U(3.W))
+  val fetch_pc = last_pc_q
 
   io.de.valid     := fetch_valid || skid_valid
   io.de.bits.pc   := Mux(skid_valid_q, skid_buffer_q.pc, fetch_pc)

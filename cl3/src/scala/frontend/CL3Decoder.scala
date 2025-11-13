@@ -106,6 +106,7 @@ object OP1Field extends DecodeField[InstructionPattern, UInt] {
       case "B" => b
       case "S" => BitPat(OP1_REG)
       case "R" => BitPat(OP1_REG)
+      case "M" => BitPat(OP1_REG)
       case _   => BitPat.dontCare(OP1_WIDTH)
     }
   }
@@ -125,6 +126,7 @@ object OP2Field     extends DecodeField[InstructionPattern, UInt] {
       case "B" => BitPat(OP2_REG)
       case "S" => BitPat(OP2_REG)
       case "R" => BitPat(OP2_REG)
+      case "M" => BitPat(OP2_REG)
       case _   => BitPat.dontCare(OP2_WIDTH)
     }
   }
@@ -232,7 +234,7 @@ class CL3Decoder extends Module {
   val io = IO(new Bundle {
     val inst  = Input(UInt(32.W))
     val pc    = Input(UInt(32.W))
-    val dummy = Input(Bool())
+    val pred  = Input(Bool())
     val out   = Output(new DEInfo())
   })
 
@@ -257,6 +259,6 @@ class CL3Decoder extends Module {
 
   // TODO: use BoringUtil API
   io.out.pc    := io.pc
-  io.out.dummy := io.dummy
+  io.out.pred  := io.pred
 
 }

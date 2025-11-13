@@ -60,12 +60,11 @@ class FetchFIFO() extends Module with FetchFIFOConfig {
 
   val rd_entry = entry_vec(rd_ptr_q)
 
-  // TODO: We should change PC logic when we support C extension
-  io.out.bits(0).pc    := Cat(rd_entry.pc(31, 3), 0.U(3.W))
+  io.out.bits(0).pc    := rd_entry.pc
   io.out.bits(0).inst  := rd_entry.inst(31, 0)
-  io.out.bits(0).dummy := false.B
+  io.out.bits(0).pred  := rd_entry.pred(0)
 
-  io.out.bits(1).pc    := Cat(rd_entry.pc(31, 3), "b100".U(3.W))
+  io.out.bits(1).pc    := rd_entry.pc + 4.U
   io.out.bits(1).inst  := rd_entry.inst(63, 32)
-  io.out.bits(1).dummy := rd_entry.pred(0)
+  io.out.bits(1).pred  := rd_entry.pred(1)
 }

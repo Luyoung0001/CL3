@@ -31,6 +31,7 @@ class CL3Core extends Module with CL3Config {
   mmu.io.lsuIn.resp <> lsu.io.in.mem
   lsu.io.in.info <> issue.io.out.op(2)
   issue.io.in.lsu := lsu.io.out.info
+  lsu.io.in.flush := issue.io.out.flush
 
   val csr = Module(new CL3CSR)
   csr.io.in.bootAddr := 0.U
@@ -59,5 +60,15 @@ class CL3Core extends Module with CL3Config {
   exec1.io.in.hold    := issue.io.out.hold
   exec1.io.in.info    := issue.io.out.op(1)
   issue.io.in.exec(1) := exec1.io.out.info
+
+  val exec2 = Module(new CL3EXU)
+  exec2.io.in.hold    := issue.io.out.hold // TODO
+  exec2.io.in.info    := issue.io.out.op(6)
+  issue.io.in.exec(2) := exec2.io.out.info
+
+  val exec3 = Module(new CL3EXU)
+  exec3.io.in.hold    := issue.io.out.hold // TODO
+  exec3.io.in.info    := issue.io.out.op(7)
+  issue.io.in.exec(3) := exec3.io.out.info
 
 }

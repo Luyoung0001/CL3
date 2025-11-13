@@ -32,8 +32,8 @@ class CL3DIV extends Module {
   val divider = Module(new RestoringDivider(32))
 
   divider.io.valid := io.in.info.valid
-  divider.io.ra    := io.in.info.ra
-  divider.io.rb    := io.in.info.rb
+  divider.io.ra    := io.in.info.rs1
+  divider.io.rb    := io.in.info.rs2
   divider.io.sign  := div | rem
 
   val div_q = RegEnable(rem | remu, io.in.info.valid)
