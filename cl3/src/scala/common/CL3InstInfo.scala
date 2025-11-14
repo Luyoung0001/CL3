@@ -392,7 +392,11 @@ object CL3InstInfo {
       name = "ecall/ebreak",
       func3 = BitPat("b000"),
       opcode = BitPat("b1110011")
-    )
+    ),
+
+    InstructionPattern(instType = "R", opType = "MUL", name = "clmul",  func7 = BitPat("b0000101"), func3 = BitPat("b001"), opcode = BitPat("b0110011")),
+    InstructionPattern(instType = "R", opType = "MUL", name = "clmulh", func7 = BitPat("b0000101"), func3 = BitPat("b011"), opcode = BitPat("b0110011")),
+    InstructionPattern(instType = "R", opType = "MUL", name = "clmulr", func7 = BitPat("b0000101"), func3 = BitPat("b010"), opcode = BitPat("b0110011"))
   )
 
   val allFields = Seq(

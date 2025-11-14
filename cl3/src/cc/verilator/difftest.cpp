@@ -157,10 +157,12 @@ int difftest_step(int n, svOpenArrayHandle info) {
       ref_difftest_regcpy((void *)&ref, DIFFTEST_TO_DUT);
       if (ref.pc != npc) {
         printf(COLOR_RED "[DIFFTEST] Mismatch in PC %0#x: "
-                         "DUT's NPC is different from REF's. "
+                         "DUT's NPC is different from REF's. DUT's NPC is %0#x, "
+                         "but REF's NPC is %0#x. "
                          "Maybe there is an wrong branch/jump/CSR Instruction"
                          "or trap.\n" COLOR_END,
-               diff_info_ptr[i].pc);
+               diff_info_ptr[i].pc, npc, ref.pc);
+        printf("MCAUSE: %0#x\n", ref.csr[1]);
 
         return 1;
       }
