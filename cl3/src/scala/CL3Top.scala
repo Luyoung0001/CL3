@@ -11,66 +11,97 @@ class CL3Top extends Module with CL3Config {
     val master   = new SimpleAXI4MasterBundle(AddrWidth, DataWidth, 4)
   })
 
+  implicit val axiP: AXI4Params = AXI4Params()
+  val dp: DCacheParams = DCacheParams()
+  val ip: ICacheParams = ICacheParams()
   val core = Module(new CL3Core)
 
   if (SimMemOption == "SoC") {
-    val icache = Module(new CL3ICache)
-    icache.io.in.req.valid          := core.io.imem.req.valid
-    core.io.imem.req.ready          := icache.io.in.req.ready
-    icache.io.in.req.bits.addr      := core.io.imem.req.bits.addr
-    icache.io.in.req.bits.cacheable := false.B
-    icache.io.in.req.bits.mask      := 0.U
-    icache.io.in.req.bits.size      := 2.U
-    icache.io.in.req.bits.wdata     := 0.U
-    icache.io.in.req.bits.wen       := false.B
+    val icache = Module(new ICache(ip))
+    icache.io.cpu.req_rd            := core.io.imem.req.valid
+    core.io.imem.req.ready          := icache.io.cpu.resp_accept
+    icache.io.cpu.req_pc            := core.io.imem.req.bits.addr
+    icache.io.cpu.req_flush := core.io.imem.req.bits.flush
+    dontTouch(core.io.imem.req.bits.flush)
+    dontTouch(icache.io.cpu.req_flush)
+    icache.io.cpu.req_invalidate := core.io.imem.req.bits.invalidate
 
-    icache.io.in.resp.ready := true.B
+    core.io.imem.resp.valid      := icache.io.cpu.resp_valid
+    core.io.imem.resp.bits.err   := icache.io.cpu.resp_error
+    core.io.imem.resp.bits.rdata := icache.io.cpu.resp_inst
 
-    core.io.imem.resp.valid      := icache.io.in.resp.valid
-    core.io.imem.resp.bits.err   := icache.io.in.resp.bits.err
-    core.io.imem.resp.bits.rdata := icache.io.in.resp.bits.rdata
+    val dcache = Module(new DCache(dp))
+    dcache.io.cpu.req.rd             := core.io.dmem.req.valid
+    core.io.dmem.req.ready           := dcache.io.cpu.accept
+    dcache.io.cpu.req.addr           := core.io.dmem.req.bits.addr
+    dcache.io.cpu.req.cacheable      := core.io.dmem.req.bits.cacheable
+    dcache.io.cpu.req.wr             := core.io.dmem.req.bits.mask
+    dcache.io.cpu.req.dataWr    := core.io.dmem.req.bits.wdata
+    dcache.io.cpu.req.invalidate := false.B
+    dcache.io.cpu.req.writeback  := false.B
+    dcache.io.cpu.req.flush      := false.B
+    dcache.io.amo := DontCare
+    dcache.io.cpu.req.reqTag := DontCare
+    // dcache.io.cpu.resp.ready := true.B
 
-    val dcache = Module(new CL3DCache)
-    dcache.io.cpu.req.valid          := core.io.dmem.req.valid
-    core.io.dmem.req.ready           := dcache.io.cpu.req.ready
-    dcache.io.cpu.req.bits.addr      := core.io.dmem.req.bits.addr
-    dcache.io.cpu.req.bits.cacheable := core.io.dmem.req.bits.cacheable
-    dcache.io.cpu.req.bits.mask      := core.io.dmem.req.bits.mask
-    dcache.io.cpu.req.bits.size      := 2.U
-    dcache.io.cpu.req.bits.wdata     := core.io.dmem.req.bits.wdata
-    dcache.io.cpu.req.bits.wen       := core.io.dmem.req.bits.wen
+    core.io.dmem.resp.valid      := dcache.io.cpu.resp.ack
+    core.io.dmem.resp.bits.err   := dcache.io.cpu.resp.error
+    core.io.dmem.resp.bits.rdata := dcache.io.cpu.resp.dataRd
 
-    dcache.io.cpu.resp.ready := true.B
+    val u_arbiter = Module(new AxiArbiter())
+    u_arbiter.io.icache_axi <> icache.io.axi
+    u_arbiter.io.dcache_axi <> dcache.io.axi
 
-    core.io.dmem.resp.valid      := dcache.io.cpu.resp.valid
-    core.io.dmem.resp.bits.err   := dcache.io.cpu.resp.bits.err
-    core.io.dmem.resp.bits.rdata := dcache.io.cpu.resp.bits.rdata
+    val clint = Module(new CL3CLINT)
+    val xbar  = Module(new CL3Xbar)
+    dontTouch(clint.io.irq)
+    
+    clint.io.axi <> xbar.io.clint
+    io.master    <> xbar.io.top
 
-    val req_xbar = Module(new SimpleReqArbiter)
-    req_xbar.io.ifuReq <> icache.io.out.req
-    req_xbar.io.lsuReq <> dcache.io.rd.req
+    // Arbiter -> Xbar (Simple AXI master signals)
+    xbar.io.xbar.aw.valid            := u_arbiter.io.mem_axi.aw.valid
+    xbar.io.xbar.aw.bits.awaddr      := u_arbiter.io.mem_axi.aw.bits.addr
+    xbar.io.xbar.aw.bits.awid        := u_arbiter.io.mem_axi.aw.bits.id
+    xbar.io.xbar.aw.bits.awlen       := u_arbiter.io.mem_axi.aw.bits.len
+    xbar.io.xbar.aw.bits.awsize      := u_arbiter.io.mem_axi.aw.bits.size
+    xbar.io.xbar.aw.bits.awburst     := u_arbiter.io.mem_axi.aw.bits.burst
+    xbar.io.xbar.aw.bits.awlock      := u_arbiter.io.mem_axi.aw.bits.lock
+    xbar.io.xbar.aw.bits.awcache     := u_arbiter.io.mem_axi.aw.bits.cache
+    xbar.io.xbar.aw.bits.awprot      := u_arbiter.io.mem_axi.aw.bits.prot
+    u_arbiter.io.mem_axi.aw.ready    := xbar.io.xbar.aw.ready
 
-    val resp_xbar = Module(new SimpleRespArbiter)
-    resp_xbar.io.ifu <> icache.io.out.resp
-    resp_xbar.io.lsu <> dcache.io.rd.resp
+    xbar.io.xbar.w.valid             := u_arbiter.io.mem_axi.w.valid
+    xbar.io.xbar.w.bits.wdata        := u_arbiter.io.mem_axi.w.bits.data
+    xbar.io.xbar.w.bits.wstrb        := u_arbiter.io.mem_axi.w.bits.strb
+    xbar.io.xbar.w.bits.wlast        := u_arbiter.io.mem_axi.w.bits.last
+    u_arbiter.io.mem_axi.w.ready     := xbar.io.xbar.w.ready
 
-    val bridge = Module(new Cache2AXI4Bridge)
-    bridge.io.rdReq <> req_xbar.io.outReq
-    bridge.io.rdResp <> resp_xbar.io.in
-    bridge.io.rdReqIsIFU := req_xbar.io.isIFU
-    resp_xbar.io.isIFU   := bridge.io.rdReqIsIFU
+    u_arbiter.io.mem_axi.b.valid     := xbar.io.xbar.b.valid
+    u_arbiter.io.mem_axi.b.bits.resp := xbar.io.xbar.b.bits.bresp
+    u_arbiter.io.mem_axi.b.bits.id   := xbar.io.xbar.b.bits.bid
+    xbar.io.xbar.b.ready             := u_arbiter.io.mem_axi.b.ready
 
-    val wr_buffer = Module(new CacheWriteBuffer)
-    wr_buffer.io.cache <> dcache.io.wr
-    wr_buffer.io.req <> bridge.io.wrReq
-    wr_buffer.io.resp <> bridge.io.wrResp
+    xbar.io.xbar.ar.valid            := u_arbiter.io.mem_axi.ar.valid
+    xbar.io.xbar.ar.bits.araddr      := u_arbiter.io.mem_axi.ar.bits.addr
+    xbar.io.xbar.ar.bits.arid        := u_arbiter.io.mem_axi.ar.bits.id
+    xbar.io.xbar.ar.bits.arlen       := u_arbiter.io.mem_axi.ar.bits.len
+    xbar.io.xbar.ar.bits.arsize      := u_arbiter.io.mem_axi.ar.bits.size
+    xbar.io.xbar.ar.bits.arburst     := u_arbiter.io.mem_axi.ar.bits.burst
+    xbar.io.xbar.ar.bits.arlock      := u_arbiter.io.mem_axi.ar.bits.lock
+    xbar.io.xbar.ar.bits.arcache     := u_arbiter.io.mem_axi.ar.bits.cache
+    xbar.io.xbar.ar.bits.arprot      := u_arbiter.io.mem_axi.ar.bits.prot
+    u_arbiter.io.mem_axi.ar.ready    := xbar.io.xbar.ar.ready
 
-    // TODO: actually we don't need this converter
+    u_arbiter.io.mem_axi.r.valid     := xbar.io.xbar.r.valid
+    u_arbiter.io.mem_axi.r.bits.data := xbar.io.xbar.r.bits.rdata
+    u_arbiter.io.mem_axi.r.bits.resp := xbar.io.xbar.r.bits.rresp
+    u_arbiter.io.mem_axi.r.bits.last := xbar.io.xbar.r.bits.rlast
+    u_arbiter.io.mem_axi.r.bits.id   := xbar.io.xbar.r.bits.rid
+    xbar.io.xbar.r.ready             := u_arbiter.io.mem_axi.r.ready
 
-    val converter = Module(new AXIWidthConverter)
-    converter.io.in <> bridge.io.axi4
-    converter.io.out <> io.master
-  } else {
+
+  }  else {
 
     val imem = Module(new MemHelper)
     imem.io.clock          := clock

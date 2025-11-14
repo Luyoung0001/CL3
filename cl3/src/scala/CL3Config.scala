@@ -9,7 +9,8 @@ trait CL3Config {
   val EnableMMU    = false
   val EnableBP     = true
   val EnableDiff   = true
-  val SimMemOption = "DPI-C"
+  // val SimMemOption = "DPI-C"
+  val SimMemOption = "SoC"
   val BootAddr     = "h80000000".U
 }
 

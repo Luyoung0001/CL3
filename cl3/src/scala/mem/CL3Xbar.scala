@@ -3,6 +3,81 @@ package cl3
 import chisel3._
 import chisel3.util._
 
+class CL3Xbar extends Module {
+  val io = IO(new Bundle {
+    val xbar  = Flipped(new SimpleAXI4MasterBundle(ADDR_WIDTH = 32, DATA_WIDTH = 32, ID_WIDTH = 4))
+    val clint = new SimpleAXI4MasterBundle(ADDR_WIDTH = 32, DATA_WIDTH = 32, ID_WIDTH = 4)
+    val top   = new SimpleAXI4MasterBundle(ADDR_WIDTH = 32, DATA_WIDTH = 32, ID_WIDTH = 4)
+  })
+
+  val CLINT_ADDR_PREFIX = "h02".U(8.W)
+
+  // Default downstream payloads mirror upstream requests
+  io.clint.ar.bits := io.xbar.ar.bits
+  io.top.ar.bits   := io.xbar.ar.bits
+  io.clint.aw.bits := io.xbar.aw.bits
+  io.top.aw.bits   := io.xbar.aw.bits
+  io.clint.w.bits  := io.xbar.w.bits
+  io.top.w.bits    := io.xbar.w.bits
+
+  // -------------------- READ CHANNEL --------------------
+  val arToClint   = io.xbar.ar.bits.araddr(31, 24) === CLINT_ADDR_PREFIX
+  val readActive  = RegInit(false.B)
+  val readSelClint = RegInit(false.B)
+
+  io.clint.ar.valid := io.xbar.ar.valid && arToClint && !readActive
+  io.top.ar.valid   := io.xbar.ar.valid && !arToClint && !readActive
+  io.xbar.ar.ready  := Mux(arToClint, io.clint.ar.ready, io.top.ar.ready) && !readActive
+
+  when(io.xbar.ar.fire) {
+    readActive   := true.B
+    readSelClint := arToClint
+  }
+
+  when(io.xbar.r.fire && io.xbar.r.bits.rlast) {
+    readActive := false.B
+  }
+
+  io.xbar.r.valid      := Mux(readSelClint, io.clint.r.valid, io.top.r.valid)
+  io.xbar.r.bits       := Mux(readSelClint, io.clint.r.bits, io.top.r.bits)
+  io.clint.r.ready     := io.xbar.r.ready && readSelClint
+  io.top.r.ready       := io.xbar.r.ready && !readSelClint
+
+  // -------------------- WRITE CHANNEL --------------------
+  val awToClint      = io.xbar.aw.bits.awaddr(31, 24) === CLINT_ADDR_PREFIX
+  val writeActiveReg = RegInit(false.B)
+  val writeSelClintReg = RegInit(false.B)
+
+  io.clint.aw.valid := io.xbar.aw.valid && awToClint && !writeActiveReg
+  io.top.aw.valid   := io.xbar.aw.valid && !awToClint && !writeActiveReg
+  io.xbar.aw.ready  := Mux(awToClint, io.clint.aw.ready, io.top.aw.ready) && !writeActiveReg
+
+  when(io.xbar.aw.fire) {
+    writeActiveReg   := true.B
+    writeSelClintReg := awToClint
+  }
+
+  val haveWriteSel      = writeActiveReg || io.xbar.aw.fire
+  val curWriteSelClint  = Mux(writeActiveReg, writeSelClintReg, awToClint)
+
+  io.clint.w.valid := io.xbar.w.valid && haveWriteSel && curWriteSelClint
+  io.top.w.valid   := io.xbar.w.valid && haveWriteSel && !curWriteSelClint
+  io.xbar.w.ready  := Mux(curWriteSelClint, io.clint.w.ready, io.top.w.ready) && haveWriteSel
+
+  io.xbar.b.valid  := Mux(writeSelClintReg, io.clint.b.valid, io.top.b.valid)
+  io.xbar.b.bits   := Mux(writeSelClintReg, io.clint.b.bits, io.top.b.bits)
+  io.clint.b.ready := io.xbar.b.ready && writeSelClintReg
+  io.top.b.ready   := io.xbar.b.ready && !writeSelClintReg
+
+  when(io.xbar.b.fire) {
+    writeActiveReg := false.B
+  }
+}
+
+
+
+
+
 class SimpleReqArbiter extends Module {
   val io = IO(new Bundle {
     val ifuReq = Flipped(Decoupled(Input(new SimpleMemReq(32))))

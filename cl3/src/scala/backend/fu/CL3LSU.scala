@@ -92,6 +92,8 @@ class CL3LSU extends Module with LSUConstant {
 
   io.out.mem.valid      := req_valid_q && !pending && !io.in.flush
   io.out.mem.bits       := req_q
+  io.out.mem.bits.mask  := Mux(req_q.wen, req_q.mask, 0.U)
+
   // TODO: refactor MuxLookup to improve timing
   io.out.mem.bits.wdata := MuxLookup(req_q.mask, req_q.wdata)(
     Seq(

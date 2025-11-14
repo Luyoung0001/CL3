@@ -62,7 +62,7 @@ ifeq ($(VCC), verilator)
 	--Wno-lint --Wno-UNOPTFLAT --Wno-BLKANDNBLK --Wno-COMBDLY --Wno-MODDUP \
 	./cl3/src/cc/verilator/main.cpp \
 	./cl3/src/cc/verilator/difftest.cpp \
-	-CFLAGS -I$(abspath ./cl3/src/cc/verilator/include) \
+	-CFLAGS -I$(abspath ./cl3/src/cc/verilator/include) -DUSE_VERILATOR\
 	-CFLAGS -g \
 	--timescale 1ns/1ps \
 	--autoflush \
@@ -99,6 +99,7 @@ WAVE_TYPE ?= fst
 RUN_ARGS += --diff
 RUN_ARGS += --ref=$(REF)
 RUN_ARGS += --image=$(IMAGE).bin
+RUN_ARGS += +firmware=$(IMAGE).mem
 
 ifneq ($(DUMP_WAVE),)
 RUN_ARGS += +$(WAVE_TYPE)
