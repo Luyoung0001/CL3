@@ -192,6 +192,7 @@ class PipeInfo extends Bundle {
   val result    = UInt(32.W)
   val rdy_stage = UInt(2.W)
   val except    = UInt(6.W)
+  val stall     = Bool()
 
   val csr = new Bundle {
     val waddr = UInt(12.W)

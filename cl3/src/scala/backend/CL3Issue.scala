@@ -41,6 +41,10 @@ class CL3IssueIO extends Bundle {
       val id1                = Output(UInt(3.W))
       val inst_delay1        = Output(UInt(2.W))
 
+      val slot0_rdIdx        = Output(UInt(5.W))
+      val slot1_rs1Idx       = Output(UInt(5.W))
+      val slot1_rs2Idx       = Output(UInt(5.W))
+
       val mismatch0          = Output(Bool())
       val mismatch1          = Output(Bool())
       val dual_issue         = Output(Bool())
@@ -97,14 +101,14 @@ class CL3Issue extends Module with CL3Config {
   val rf     = Module(new CL3RF())
   val bypass = Module(new BypassNetwork)
 
-  stall       := pipes.map(_.io.out.stall).reduce(_ || _)
+  stall       := pipes.map(_.io.out.e1.stall).reduce(_ || _)
   flush       := pipes.map(_.io.out.flush).reduce(_ || _)
   io.out.hold := stall
 
   val slot_op = Wire(Vec(2, new OpInfo))
 
   for (i <- 0 until 2) {
-    pipes(i).io.in.stall := stall
+    // pipes(i).io.in.stall := stall
     pipes(i).io.in.irq   := io.in.irq
     pipes(i).io.in.csr   := io.in.csr
     pipes(i).io.in.lsu   := io.in.lsu
@@ -158,6 +162,10 @@ class CL3Issue extends Module with CL3Config {
   val rs1_dep_internal  = (slot_op(0).rdIdx === slot_op(1).rs1Idx) && slot_op(0).wen && slot_op(0).rdIdx.orR //TODO:
   val rs2_dep_internal  = (slot_op(0).rdIdx === slot_op(1).rs2Idx) && slot_op(0).wen && slot_op(0).rdIdx.orR //TODO:
   val data_dep_internal = rs1_dep_internal || rs2_dep_internal
+
+  io.out.debug.slot0_rdIdx := slot_op(0).rdIdx
+  io.out.debug.slot1_rs1Idx := slot_op(1).rs1Idx
+  io.out.debug.slot1_rs2Idx := slot_op(1).rs2Idx
 
   pipes(1).io.in.issue.rs1_id := Mux(rs1_dep_internal, 1.U, byp_res(1).rs1_id)
   pipes(1).io.in.issue.rs2_id := Mux(rs2_dep_internal, 1.U, byp_res(1).rs2_id)
@@ -384,7 +392,7 @@ class CL3Issue extends Module with CL3Config {
 
 
   val pc_mismatch = flag(1) && !slot_br_q(0) && second_pc =/= io.in.exec(0).bp.source + 4.U ||
-    flag(1) && slot_br_q(0) && second_pc =/= io.in.exec(0).bp.target
+    slot_br_q(0) && second_pc =/= io.in.exec(0).bp.target
 
   val another_mismatch =
     flag(1) && slot_br_q(1) && slot_pred_q(1) && fetch0.bits.pc =/= pc_q 
