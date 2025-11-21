@@ -75,7 +75,8 @@ class CL3LSU extends Module with LSUConstant {
 
   when(io.in.flush) {
     req_valid_q := false.B
-  }.elsewhen(io.in.info.valid && !(io.out.mem.valid && !io.out.mem.ready)) {
+  // }.elsewhen(io.in.info.valid && !(io.out.mem.valid && !io.out.mem.ready)) {
+  }.elsewhen(io.in.info.valid && !(req_valid_q && !io.out.mem.fire)) { //TODO:
     req_valid_q := true.B
 
     req_q.addr      := addr

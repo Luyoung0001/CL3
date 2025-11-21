@@ -74,7 +74,9 @@ class CL3Pipe(pipeID: Int) extends Module {
   io.out.e1.valid  := e1_q.valid
   io.out.e1.result := io.in.exu(0).result
 
-  io.out.e1.stall  := e1_q.valid && e1_q.info.isDIV && !io.in.div.valid || e2_stall
+  // io.out.e1.stall  := e1_q.valid && e1_q.info.isDIV && !io.in.div.valid || e2_stall
+  io.out.e1.stall  := e1_q.valid && e1_q.info.isDIV && !io.in.div.valid || e2_stall ||
+    e1_q.valid && e1_q.info.isLSU && e1_q.rdy_stage(0) && io.in.lsu.stall
 
   def getBypassResult(id: UInt, default: UInt): UInt = {
     if (pipeID == 0) {
@@ -134,7 +136,9 @@ class CL3Pipe(pipeID: Int) extends Module {
   io.out.e2.info.wen := !(io.in.pipe.e2.stall || io.out.e2.stall ) && e2_q.info.wen // TODO:
   io.out.e2.result   := MuxCase(e2_q.result, Seq( io.out.e2.isLd -> io.in.lsu.rdata, io.out.e2.isMul -> io.in.mul.result, e2_q.rdy_stage(0) -> io.in.exu(1).result))
 
-  io.out.e2.stall    := e2_q.valid && e2_q.info.isLSU && e2_q.rdy_stage(0) && !io.in.lsu.valid || wb_stall
+  // io.out.e2.stall    := e2_q.valid && e2_q.info.isLSU && e2_q.rdy_stage(0) && !io.in.lsu.valid || wb_stall
+  io.out.e2.stall    := e2_q.valid && e2_q.info.isLSU && e2_q.rdy_stage(0) && !io.in.lsu.valid || wb_stall ||
+    e2_q.valid && e2_q.info.isLSU && e2_q.rdy_stage(1) && io.in.lsu.stall
 
   val wb_q = RegInit(0.U.asTypeOf(new PipeInfo))
 
@@ -155,6 +159,15 @@ class CL3Pipe(pipeID: Int) extends Module {
 
   }
 
+  val wb_result_buf_q = RegInit(0.U(32.W))
+  val wb_result_buf_valid_q = RegInit(false.B)
+
+  when(wb_flush && io.out.wb.commit) {
+    wb_result_buf_q := io.out.wb.result
+    wb_result_buf_valid_q := true.B
+  }.elsewhen(!wb_flush && !wb_stall) {
+    wb_result_buf_valid_q := false.B
+  }
   // when(!io.in.stall) {
   //   wb_q               := e2_q
   //   wb_q.result        := io.out.e2.result
@@ -168,9 +181,12 @@ class CL3Pipe(pipeID: Int) extends Module {
     wb_q.result,
     Seq(
       (io.out.wb.isLd && wb_q.rdy_stage(1))  -> io.in.lsu.rdata,
-      (io.out.wb.isMul && wb_q.rdy_stage(1)) -> io.in.mul.result
+      (io.out.wb.isMul && wb_q.rdy_stage(1)) -> io.in.mul.result,
+      wb_result_buf_valid_q -> wb_result_buf_q
     )
   )
+
+  
 
   io.out.wb.mem.cacheable := Mux(wb_q.rdy_stage(1), io.in.lsu.cacheable, wb_q.mem.cacheable)
   io.out.wb.valid := wb_q.valid && !wb_stall

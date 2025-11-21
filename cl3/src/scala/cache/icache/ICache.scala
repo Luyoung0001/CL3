@@ -349,7 +349,7 @@ class ICache(p: ICacheParams) extends Module {
 // Data RAM refill write address
     when(state_p1_q === STATE_LOOKUP_P1 && next_state_p1_r === STATE_REFILL_P1) {
         data_write_addr_p1_q := ar.bits.addr(CACHE_DATA_ADDR_P1_W + 2, 3)
-    } .elsewhen(state_p1_q === STATE_WAIT_P1 && next_state_p1_r === STATE_REFILL_P1) {
+    } .elsewhen(state_q === STATE_RELOOKUP && next_state_p1_r === STATE_REFILL_P1) {
         data_write_addr_p1_q := ar.bits.addr(CACHE_DATA_ADDR_P1_W + 2, 3)
     } .elsewhen(state_p1_q === STATE_REFILL_P1 && r.valid && refill_word_idx_p1_q(0)) {
         data_write_addr_p1_q := data_write_addr_p1_q + 1.U
