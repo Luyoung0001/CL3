@@ -178,7 +178,7 @@ class CL3Issue extends Module with CL3Config {
     pipe_e1(1).isMem && pipe_e1(1).rdy_stage(1)
 
   val mul_delay = pipe_e1(0).isMul && pipe_e1(0).rdy_stage(1) ||
-    pipe_e1(1).isMem && pipe_e1(1).rdy_stage(1)
+    pipe_e1(1).isMul && pipe_e1(1).rdy_stage(1)
 
   val div_pending = Wire(Bool())
 

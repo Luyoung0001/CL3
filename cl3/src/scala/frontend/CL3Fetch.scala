@@ -125,7 +125,7 @@ class CL3Fetch() extends Module with CL3Config {
 
   // Last fetch address
   when(io.mem.req.fire) {
-    last_pc_q := icache_pc
+    last_pc_q := icache_pc(31, 2) ## 0.U(2.W)
   }
 
   when(io.mem.req.fire) {
@@ -142,7 +142,7 @@ class CL3Fetch() extends Module with CL3Config {
   io.mem.req.bits.size       := 3.U
   io.mem.req.bits.wen        := false.B
   // io.mem.req.bits.addr       := Cat(icache_pc(31, 3), 0.U(3.W))
-  io.mem.req.bits.addr       := icache_pc
+  io.mem.req.bits.addr       := icache_pc(31, 2) ## 0.U(2.W)
   io.mem.req.bits.flush      := io.flush || flush_q
   io.mem.req.bits.invalidate := false.B
 
@@ -169,6 +169,6 @@ class CL3Fetch() extends Module with CL3Config {
 
   // TODO: add trap support
 
-  io.bp.pc     := icache_pc
+  io.bp.pc     := icache_pc(31, 2) ## 0.U(2.W)
   io.bp.accept := !stall
 }

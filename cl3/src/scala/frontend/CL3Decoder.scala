@@ -62,7 +62,7 @@ object OP0Field extends DecodeField[InstructionPattern, UInt] {
       case "sra"  => BitPat(OP0_SRA)
       case "or"   => BitPat(OP0_OR)
       case "and"  => BitPat(OP0_AND)
-      case _      => BitPat.dontCare(OP0_WIDTH)
+      case _      => BitPat(OP0_ADD)
     }
 
     op.instType match {
@@ -106,7 +106,6 @@ object OP1Field extends DecodeField[InstructionPattern, UInt] {
       case "B" => b
       case "S" => BitPat(OP1_REG)
       case "R" => BitPat(OP1_REG)
-      case "M" => BitPat(OP1_REG)
       case _   => BitPat.dontCare(OP1_WIDTH)
     }
   }
@@ -126,7 +125,6 @@ object OP2Field     extends DecodeField[InstructionPattern, UInt] {
       case "B" => BitPat(OP2_REG)
       case "S" => BitPat(OP2_REG)
       case "R" => BitPat(OP2_REG)
-      case "M" => BitPat(OP2_REG)
       case _   => BitPat.dontCare(OP2_WIDTH)
     }
   }
@@ -139,12 +137,9 @@ object IllegalField extends BoolDecodeField[InstructionPattern]   {
       case "R"    => BitPat(false.B)
       case "J"    => BitPat(false.B)
       case "I"    => BitPat(false.B)
-      case "M"    => BitPat(false.B)
       case "B"    => BitPat(false.B)
       case "S"    => BitPat(false.B)
       case "U"    => BitPat(false.B)
-      case "CSR"  => BitPat(false.B)
-      case "PRIV" => BitPat(false.B)
       case _      => BitPat(true.B)
     }
   }
@@ -156,7 +151,7 @@ object WENField extends BoolDecodeField[InstructionPattern] {
   def genTable(op: InstructionPattern): BitPat = {
     if (op.instType == "B" || op.instType == "S") {
       BitPat(false.B)
-    } else if (op.name == "ecall/ebreak")
+    } else if (op.name == "ecall/ebreak" || op.name == "fence")
       BitPat(false.B)
     else
       BitPat(true.B)

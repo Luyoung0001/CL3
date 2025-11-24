@@ -61,7 +61,7 @@ class CL3Pipe(pipeID: Int) extends Module {
   when(io.in.issue.fire && !e1_flush && !e1_stall) {
     e1_q.info      := io.in.issue.info
     // TODO: support RVC
-    e1_q.npc       := Mux(io.in.exu(0).br.valid, io.in.exu(0).br.pc, io.in.issue.info.pc + 4.U)
+    e1_q.npc       := Mux(io.in.exu(0).br.valid, io.in.exu(0).br.pc(31, 2) ## 0.U(2.W), io.in.issue.info.pc + 4.U)
     e1_q.rs1       := io.in.issue.rs1
     e1_q.rs2       := io.in.issue.rs2
     e1_q.rs1_id    := io.in.issue.rs1_id
