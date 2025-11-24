@@ -71,12 +71,12 @@ class CL3Pipe(pipeID: Int) extends Module {
   }
 
   io.out.e1        := e1_q
-  io.out.e1.valid  := e1_q.valid
   io.out.e1.result := io.in.exu(0).result
-
   // io.out.e1.stall  := e1_q.valid && e1_q.info.isDIV && !io.in.div.valid || e2_stall
   io.out.e1.stall  := e1_q.valid && e1_q.info.isDIV && !io.in.div.valid || e2_stall ||
     e1_q.valid && e1_q.info.isLSU && e1_q.rdy_stage(0) && io.in.lsu.stall
+
+  io.out.e1.commit := e1_q.valid && !io.out.e1.stall
 
   def getBypassResult(id: UInt, default: UInt): UInt = {
     if (pipeID == 0) {
@@ -139,6 +139,7 @@ class CL3Pipe(pipeID: Int) extends Module {
   // io.out.e2.stall    := e2_q.valid && e2_q.info.isLSU && e2_q.rdy_stage(0) && !io.in.lsu.valid || wb_stall
   io.out.e2.stall    := e2_q.valid && e2_q.info.isLSU && e2_q.rdy_stage(0) && !io.in.lsu.valid || wb_stall ||
     e2_q.valid && e2_q.info.isLSU && e2_q.rdy_stage(1) && io.in.lsu.stall
+  io.out.e2.commit   := io.out.e2.info.wen
 
   val wb_q = RegInit(0.U.asTypeOf(new PipeInfo))
 
@@ -162,7 +163,8 @@ class CL3Pipe(pipeID: Int) extends Module {
   val wb_result_buf_q = RegInit(0.U(32.W))
   val wb_result_buf_valid_q = RegInit(false.B)
 
-  when(wb_flush && io.out.wb.commit) {
+  // when(wb_flush && io.out.wb.commit && (io.out.wb.isLd || io.out.wb.isMul)) {
+  when(wb_flush && io.out.wb.commit && (io.out.wb.isLd || io.out.wb.isMul)) {
     wb_result_buf_q := io.out.wb.result
     wb_result_buf_valid_q := true.B
   }.elsewhen(!wb_flush && !wb_stall) {
@@ -189,7 +191,9 @@ class CL3Pipe(pipeID: Int) extends Module {
   
 
   io.out.wb.mem.cacheable := Mux(wb_q.rdy_stage(1), io.in.lsu.cacheable, wb_q.mem.cacheable)
-  io.out.wb.valid := wb_q.valid && !wb_stall
+  // io.out.wb.valid := wb_q.valid && !wb_stall
+  io.out.wb.valid := wb_q.valid
+  io.out.wb.commit := wb_q.valid && !wb_stall
 
   io.out.wb.stall := wb_q.valid && wb_q.info.isLSU && wb_q.rdy_stage(1) && !io.in.lsu.valid
   io.out.flush := false.B // TODO: add exception

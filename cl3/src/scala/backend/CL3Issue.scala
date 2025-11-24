@@ -277,8 +277,8 @@ class CL3Issue extends Module with CL3Config {
 
 
   val mispred = Wire(Bool())
-  val e1_slot0_lsu = pipe_e1(0).isMem && pipe_e1(0).rdy_stage(1)
-  val e1_slot1_lsu = pipe_e1(1).isMem && pipe_e1(1).rdy_stage(1) && !mispred
+  val e1_slot0_lsu = pipe_e1(0).isMem && pipe_e1(0).rdy_stage(1) && pipe_e1(0).commit
+  val e1_slot1_lsu = pipe_e1(1).isMem && pipe_e1(1).rdy_stage(1) && pipe_e1(1).commit && !mispred
   val e1_lsu_op    = Wire(new OpInfo)
   e1_lsu_op       := Mux(e1_slot1_lsu, OpInfo.fromPipe(pipe_e1(1)), OpInfo.fromPipe(pipe_e1(0)))
   e1_lsu_op.valid := e1_slot0_lsu || e1_slot1_lsu
@@ -294,8 +294,8 @@ class CL3Issue extends Module with CL3Config {
   issue_mul_op       := Mux(issue_slot0_mul, slot_op(0), slot_op(1))
   issue_mul_op.valid := (issue_slot0_mul || issue_slot1_mul) && ~io.in.irq
 
-  val e1_slot0_mul = pipe_e1(0).isMul && pipe_e1(0).rdy_stage(1)
-  val e1_slot1_mul = pipe_e1(1).isMul && pipe_e1(1).rdy_stage(1)
+  val e1_slot0_mul = pipe_e1(0).isMul && pipe_e1(0).rdy_stage(1) && pipe_e1(0).commit
+  val e1_slot1_mul = pipe_e1(1).isMul && pipe_e1(1).rdy_stage(1) && pipe_e1(1).commit
 
   val e1_mul_op = Wire(new OpInfo)
   e1_mul_op       := Mux(e1_slot1_mul, OpInfo.fromPipe(pipe_e1(1)), OpInfo.fromPipe(pipe_e1(0)))

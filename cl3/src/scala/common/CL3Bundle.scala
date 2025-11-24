@@ -192,6 +192,7 @@ class PipeInfo extends Bundle {
   val result    = UInt(32.W)
   val rdy_stage = UInt(2.W)
   val except    = UInt(6.W)
+  val commit    = Bool()
   val stall     = Bool()
 
   val csr = new Bundle {
@@ -214,7 +215,7 @@ class PipeInfo extends Bundle {
 
   def rdIdx: UInt = info.inst(11, 7)
 
-  def commit: Bool = valid
+  // def commit: Bool = valid
 }
 
 class ISCSRInput extends Bundle {

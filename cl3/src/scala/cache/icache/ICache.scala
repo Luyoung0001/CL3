@@ -50,7 +50,7 @@ class ICache(p: ICacheParams) extends Module {
     val flush_addr_q    = RegInit(0.U(p.tagReqLineW.W));
 
     val unaligned_en = cpu.req_pc(2)
-    val crossLineEn  = cpu.req_pc(4) & cpu.req_pc(2)
+    val crossLineEn  = cpu.req_pc(3) & cpu.req_pc(2)
 
 //-----------------------------------------------------------------
 // Lookup validation
@@ -359,7 +359,7 @@ class ICache(p: ICacheParams) extends Module {
     data_addr_p1_r := req_data_addr_p1_w
     when(state_p1_q === STATE_REFILL_P1) {
         data_addr_p1_r := data_write_addr_p1_q
-    } .elsewhen(state_p1_q === STATE_RELOOKUP_P1) {
+    } .elsewhen(state_p1_q === STATE_RELOOKUP_P1 || state_q === STATE_RELOOKUP) {
         data_addr_p1_r := lookup_addr_p1_q(CACHE_DATA_ADDR_P1_W + 2, 3)
     } .otherwise {
         data_addr_p1_r := req_data_addr_p1_w

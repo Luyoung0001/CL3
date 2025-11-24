@@ -38,7 +38,7 @@ class CL3Core extends Module with CL3Config {
   csr.io.in.irq      := false.B
   csr.io.in.info     := issue.io.out.op(5)
   csr.io.in.wb       := issue.io.out.csr
-  csr.io.in.bootAddr := BootAddr
+  csr.io.in.bootAddr := BOOTADDR
   issue.io.in.csr    := csr.io.out.info
   mmu.io.ctrl        := csr.io.out.mmu
 
