@@ -9,9 +9,10 @@ trait CL3Config {
   val EnableMMU    = false
   val EnableBP     = true
   val EnableDiff   = true
+  val EnablePerf   = true
   // val SimMemOption = "DPI-C"
   val SimMemOption = "SoC"
-  val BOOTADDR     = "h80000000".U
+  val BootAddr     = "h80000000".U
 }
 
 object CL3Config extends CL3Config {}

@@ -48,24 +48,24 @@ class ICacheDataRamDev(p: ICacheParams) extends Module {
     // io.dout := memBanks(bank).read(row, true.B)
 }
 
+// class ICacheDataRam(p: ICacheParams)
+//     extends Module {
+//   val io = IO(new DualPortICDataRamIO(p))
+
+
+//   val m = Module(new ICacheDataRamDev(p))
+//   m.io <> io
+// }
+
 class ICacheDataRam(p: ICacheParams)
     extends Module {
   val io = IO(new DualPortICDataRamIO(p))
 
-
-  val m = Module(new ICacheDataRamDev(p))
-  m.io <> io
+  if (p.useMacro) {
+    val m = Module(new ICacheDataRamMacro(p))
+    m.io <> io
+  } else {
+    val m = Module(new ICacheDataRamDev(p))
+    m.io <> io
+  }
 }
-
-// class ICacheDataRam(p: ICacheParams)
-//     extends Module {
-//   val io = IO(new ICacheDataRamIO(p))
-
-//   if (p.useMacro) {
-//     val m = Module(new ICacheDataRamMacro(p))
-//     m.io <> io
-//   } else {
-//     val m = Module(new ICacheDataRamDev(p))
-//     m.io <> io
-//   }
-// }

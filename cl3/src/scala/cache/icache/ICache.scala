@@ -3,7 +3,7 @@ package cl3
 import chisel3._
 import chisel3.util._
 
-class ICache(p: ICacheParams) extends Module {
+class ICache(p: ICacheParams) extends Module with CL3Config {
     val io = IO(new ICacheIO(p))
 
     val (cpu, aw, w, b, ar, r) = (io.cpu, io.axi.aw, io.axi.w, io.axi.b, io.axi.ar, io.axi.r)
@@ -29,6 +29,7 @@ class ICache(p: ICacheParams) extends Module {
     val STATE_LOOKUP   = states(1)
     val STATE_REFILL   = states(2)
     val STATE_RELOOKUP = states(3)
+    // val STATE_DONE     = states(4)
     val state_q = RegInit(STATE_FLUSH)
     val next_state_r = WireDefault(state_q)
     dontTouch(next_state_r)
@@ -502,4 +503,22 @@ class ICache(p: ICacheParams) extends Module {
     // when(state_q === STATE_LOOKUP && next_state_r =/= STATE_REFILL && cpu.req_rd) {
     //         state_q := STATE_DONE
     //     }
+
+//-----------------------------------------------------------------
+// Performance monitor hookup
+//-----------------------------------------------------------------
+    if(CL3Config.EnablePerf){
+        val perf = Module(new ICachePerf(p))
+        perf.io.ev_req_fire          := cpu.req_rd && cpu.resp_accept
+        perf.io.ev_miss              := lookup_valid_q && !tag_hit_any_w && (state_q === STATE_LOOKUP)
+        perf.io.ev_refill_burst_fire := ar.valid && ar.ready
+        perf.io.ev_refill_beat_fire  := r.valid
+        perf.io.ev_refill_line_last  := r.valid && r.bits.last
+        perf.io.ev_stall_cycle       := cpu.req_rd && !cpu.resp_accept
+        perf.io.ev_miss_penalty_cyc  := (state_q === STATE_REFILL) || (state_q === STATE_RELOOKUP)
+        perf.io.ev_flush             := cpu.req_flush && cpu.resp_accept
+        perf.io.ev_invalidate        := cpu.req_invalidate && cpu.resp_accept
+        perf.io.ev_axi_err           := r.valid && r.bits.resp =/= 0.U
+    }
+
 }
