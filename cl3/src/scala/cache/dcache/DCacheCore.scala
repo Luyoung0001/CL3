@@ -75,17 +75,14 @@ class dcache_core(p: DCacheParams) extends Module {
 
     val mem_accept_r = WireDefault(false.B)
     val tag_hit_any_m_w = Wire(Bool())
-    val bankflict = WireDefault(false.B)
-    dontTouch(bankflict)
 
     when(state_q === STATE_LOOKUP){
         // Previous access missed - do not accept new requests
         when ((mem_rd_m_q || mem_amo_m_q || (mem_wr_m_q =/= 0.U)) && !tag_hit_any_m_w){
             mem_accept_r := false.B
         // Write followed by read - detect writes to the same bank, or addresses which alias in tag lookups
-        } .elsewhen((mem_wr_m_q.orR) && cpureq.rd && cpureq.addr(3, 2) === mem_addr_m_q(3, 2) && mem_addr_m_q(31, 28) =/= 0.U){
+        } .elsewhen((mem_wr_m_q.orR) && cpureq.rd && ((cpureq.addr(3, 2) === mem_addr_m_q(3, 2)) || ( cpureq.addr(6, 5) === mem_addr_m_q(6, 5))) && mem_addr_m_q(31, 28) =/= 0.U){
             mem_accept_r := false.B
-            bankflict := true.B
         } .otherwise{
             mem_accept_r := true.B
         }
@@ -711,6 +708,19 @@ class dcache_core(p: DCacheParams) extends Module {
     pmem_error_w         := pmemresp.error
     pmem_read_data_w     := pmemresp.readData
 
+    if(CL3Config.EnablePerf){
+        val perf = Module(new DCachePerf(p))
+        val req_fire = cpureq.rd && io.cpu.accept
+        perf.io.ev_req_fire          := req_fire
+        perf.io.ev_read_req          := req_fire && !(cpureq.dataWr.orR)
+        perf.io.ev_write_req         := req_fire && (cpureq.dataWr.orR)
+        perf.io.ev_miss              := (state_q === STATE_READ || state_q === STATE_WRITE)
+        perf.io.ev_refill_beat_fire  := pmem_ack_w
+        perf.io.ev_refill_line_last  := pmem_ack_w && pmem_last_w
+        perf.io.ev_miss_penalty_cyc  := (state_q === STATE_REFILL) || (state_q === STATE_READ) || (state_q === STATE_WRITE) || (state_q === STATE_EVICT_WAIT) || (state_q === STATE_EVICT)
+        perf.io.ev_writeback         := state_q === STATE_EVICT_WAIT
+        perf.io.ev_amo               := req_fire && (io.amo.isAmo || io.amo.isLR || io.amo.isSC)
+    }
     // val dbg_state = Wire(UInt(80.W))
     // dbg_state := "RESET".U
 

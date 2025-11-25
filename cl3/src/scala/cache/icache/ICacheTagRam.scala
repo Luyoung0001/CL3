@@ -53,23 +53,23 @@ class ICacheTagRamDev(p: ICacheParams) extends Module {
     // io.dout := r_q
 }
 
+// class ICacheTagRam(p: ICacheParams)
+//     extends Module {
+//   val io = IO(new DualPortICTagRamIO(p))
+
+//   val m = Module(new ICacheTagRamDev(p))
+//   m.io <> io
+// }
+
 class ICacheTagRam(p: ICacheParams)
     extends Module {
   val io = IO(new DualPortICTagRamIO(p))
 
-  val m = Module(new ICacheTagRamDev(p))
-  m.io <> io
+  if (p.useMacro) {
+    val m = Module(new ICacheTagRamMacro(p))
+    m.io <> io
+  } else {
+    val m = Module(new ICacheTagRamDev(p))
+    m.io <> io
+  }
 }
-
-// class ICacheTagRam(p: ICacheParams)
-//     extends Module {
-//   val io = IO(new ICacheTagRamIO(p))
-
-//   if (p.useMacro) {
-//     val m = Module(new ICacheTagRamMacro(p))
-//     m.io <> io
-//   } else {
-//     val m = Module(new ICacheTagRamDev(p))
-//     m.io <> io
-//   }
-// }
