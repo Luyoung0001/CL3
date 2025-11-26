@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 trait DecodeFIFOConfig {
-  val FIFODepth: Int = 8
+  val FIFODepth: Int = 4
 }
 
 class DecodeFIFO extends Module with DecodeFIFOConfig {
@@ -24,7 +24,7 @@ class DecodeFIFO extends Module with DecodeFIFOConfig {
   val wr_ptr_q  = RegInit(0.U(log2Ceil(FIFODepth).W))
   val count_q   = RegInit(0.U(log2Ceil(FIFODepth + 1).W))
 
-  io.in.ready := ((FIFODepth.U - count_q) >= 2.U) && !io.flush //TODO:
+  io.in.ready := ((FIFODepth.U - count_q) >= 2.U)
 
   val head = entrys(rd_ptr_q)
 
@@ -42,11 +42,18 @@ class DecodeFIFO extends Module with DecodeFIFOConfig {
 
   when(io.flush) {
     for (i <- 0 until FIFODepth) {
-      entrys(i) := 0.U.asTypeOf(new FIFOEntry)
+      // entrys(i) := 0.U.asTypeOf(new FIFOEntry)
+      entrys(i).valid := false.B
     }
   }.elsewhen(push) {
-    entrys(wr_ptr_q).info := io.in.bits(0)
+    // entrys(wr_ptr_q).info := io.in.bits(0)
     entrys(wr_ptr_q).valid := true.B
+    // entrys(wr_ptr_q +% 1.U).info := io.in.bits(1) //TODO:
+    // entrys(wr_ptr_q +% 1.U).valid := !io.in.bits(0).pred //TODO:
+  }
+
+  when(push && !io.flush) {
+    entrys(wr_ptr_q).info := io.in.bits(0)
     entrys(wr_ptr_q +% 1.U).info := io.in.bits(1) //TODO:
     entrys(wr_ptr_q +% 1.U).valid := !io.in.bits(0).pred //TODO:
   }

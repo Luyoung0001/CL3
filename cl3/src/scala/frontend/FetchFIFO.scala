@@ -22,7 +22,7 @@ class FetchFIFO() extends Module with FetchFIFOConfig {
   val is_full  = (count_q === FIFODepth.U)
   val is_empty = (count_q === 0.U)
 
-  io.in.ready := !is_full && !io.flush
+  io.in.ready := !is_full
 
   val head = entry_vec(rd_ptr_q)
 

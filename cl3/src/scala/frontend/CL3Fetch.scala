@@ -9,6 +9,11 @@ class FEIO extends Bundle {
   val de    = Decoupled(Output(new FERawInfo))
   val bp    = Flipped(new NPCIO)
   val flush = Input(Bool())
+
+  val debug = new Bundle {
+    val branch = Output(Bool())
+    val drop_resp = Output(Bool())
+  }
 }
 
 class CL3Fetch() extends Module with CL3Config {
@@ -22,58 +27,21 @@ class CL3Fetch() extends Module with CL3Config {
     outstanding_q := false.B
   }
 
-  val flush_q = RegInit(false.B)
-  flush_q := io.mem.req.bits.invalidate && io.mem.req.valid && !io.mem.req.ready
-
   val active_q    = RegInit(false.B)
   val mem_is_busy = outstanding_q && !io.mem.resp.valid
   val stall       = !io.de.ready || mem_is_busy || !io.mem.req.ready
 
-  val branch_q      = RegInit(false.B)
-  val branch_pc_q   = RegInit(0.U(32.W))
-  val branch_priv_q = RegInit(0.U(2.W)) // M mode
-
-  val branch      = Wire(Bool())
-  val branch_pc   = Wire(UInt(32.W))
-  val branch_priv = Wire(UInt(2.W))
-
-  if (EnableMMU) {
-
-    branch      := branch_q
-    branch_pc   := branch_pc_q
-    branch_priv := branch_priv_q
-
-    when(io.br.valid) {
-      branch_q      := true.B
-      branch_pc_q   := io.br.pc
-      branch_priv_q := io.br.priv
-    }.elsewhen(io.mem.req.fire) {
-      branch_q    := false.B
-      branch_pc_q := 0.U
-    }
-  } else {
-
-    branch      := branch_q || io.br.valid
-    branch_pc   := Mux(branch_q && !io.br.valid, branch_pc_q, io.br.pc)
-    branch_priv := 0.U
-
-    when(io.br.valid && mem_is_busy) {
-      branch_q    := branch
-      branch_pc_q := branch_pc
-    }.elsewhen(!mem_is_busy) {
-      branch_q    := false.B
-      branch_pc_q := 0.U
-    }
+  val branch_q    = RegInit(false.B)
+  when(io.br.valid) {
+    branch_q := true.B
+  }.elsewhen(io.mem.resp.valid) {
+    branch_q := false.B
   }
 
-  if (EnableMMU) {
-    when(branch && !stall) {
-      active_q := true.B
-    }
-  } else {
-    when(branch) {
-      active_q := true.B
-    }
+  val branch = io.br.valid || branch_q
+
+  when(branch) {
+    active_q := true.B
   }
 
   val stall_q = RegNext(stall, false.B)
@@ -82,46 +50,19 @@ class CL3Fetch() extends Module with CL3Config {
   val last_pc_q   = RegInit(0.U(32.W))
   val last_pred_q = RegInit(0.U(2.W))
 
-  if (EnableMMU) {
-    when(branch && !stall) {
-      pc_q := branch_pc
-    }.elsewhen(!stall) {
-      pc_q := io.bp.npc
-    }
-  } else {
-    when(branch && (stall || !active_q)) {
-      pc_q := branch_pc
-    }.elsewhen(!stall) {
-      pc_q := io.bp.npc
-    }
+  when(branch && (stall || !active_q)) {
+    pc_q := io.br.pc
+  }.elsewhen(!stall) {
+    pc_q := io.bp.npc
   }
 
   val icache_pc   = Wire(UInt(32.W))
   val icache_priv = Wire(UInt(2.W))
   val drop_resp   = Wire(Bool())
 
-  if (EnableMMU) {
-    val priv_q        = RegInit(0.U(2.W))
-    val last_branch_q = RegInit(false.B)
-
-    when(branch && !stall) {
-      priv_q := branch_priv
-    }
-
-    when(branch && !stall) {
-      last_branch_q := true.B
-    }.elsewhen(!stall) {
-      last_branch_q := false.B
-    }
-
-    icache_pc   := pc_q
-    icache_priv := priv_q
-    drop_resp   := (branch || last_branch_q)
-  } else {
-    icache_pc   := Mux(branch && !stall_q, branch_pc, pc_q)
-    icache_priv := 0.U
-    drop_resp   := branch
-  }
+  icache_pc   := Mux(branch, io.br.pc, pc_q)
+  icache_priv := 0.U
+  drop_resp   := branch
 
   // Last fetch address
   when(io.mem.req.fire) {
@@ -134,7 +75,10 @@ class CL3Fetch() extends Module with CL3Config {
     last_pred_q := 0.U
   }
 
-  // TODO:
+  io.debug.branch := branch
+  io.debug.drop_resp := drop_resp
+  dontTouch(io.debug)
+
   io.mem.req.valid           := active_q && io.de.ready && !mem_is_busy
   io.mem.req.bits.wdata      := 0.U
   io.mem.req.bits.mask       := "b1111".U
@@ -143,7 +87,7 @@ class CL3Fetch() extends Module with CL3Config {
   io.mem.req.bits.wen        := false.B
   // io.mem.req.bits.addr       := Cat(icache_pc(31, 3), 0.U(3.W))
   io.mem.req.bits.addr       := icache_pc(31, 2) ## 0.U(2.W)
-  io.mem.req.bits.flush      := io.flush || flush_q
+  io.mem.req.bits.flush      := false.B //TODO:
   io.mem.req.bits.invalidate := false.B
 
   val skid_buffer_q = RegInit(0.U.asTypeOf(new FERawInfo))
