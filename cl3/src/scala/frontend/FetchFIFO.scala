@@ -15,9 +15,9 @@ class FetchFIFO() extends Module with FetchFIFOConfig {
   })
 
   val entry_vec = RegInit(VecInit(Seq.fill(FIFODepth)(0.U.asTypeOf(new FERawInfo))))
-  val rd_ptr_q  = RegInit(0.U(1.W))
-  val wr_ptr_q  = RegInit(0.U(1.W))
-  val count_q   = RegInit(0.U(2.W))
+  val rd_ptr_q  = RegInit(0.U(log2Ceil(FIFODepth).W))
+  val wr_ptr_q  = RegInit(0.U(log2Ceil(FIFODepth).W))
+  val count_q   = RegInit(0.U((log2Ceil(FIFODepth)+ 1).W))
 
   val is_full  = (count_q === FIFODepth.U)
   val is_empty = (count_q === 0.U)

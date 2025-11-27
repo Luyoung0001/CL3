@@ -8,7 +8,7 @@ class CL3Top extends Module with CL3Config {
   val io = IO(new Bundle {
     val extIrq   = Input(Bool())
     val timerIrq = Input(Bool())
-    val master   = new SimpleAXI4MasterBundle(AddrWidth, DataWidth, 4)
+    val master   = new SimpleAXI4MasterBundle(ADDR_WIDTH, DATA_WIDTH, 4)
   })
 
   implicit val axiP: AXI4Params = AXI4Params()

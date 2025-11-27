@@ -2,7 +2,6 @@ package cl3
 
 import chisel3._
 import chisel3.util._
-import javax.swing.plaf.synth.Region
 
 class CL3IssueIO extends Bundle {
   val in = new Bundle {
@@ -21,7 +20,7 @@ class CL3IssueIO extends Bundle {
     val op   = Vec(8, Output(new OpInfo))
     val csr  = new ISCSROutput
     val hold = Output(Bool())
-    val flush = Output(Bool())
+    val lsu_flush = Output(Bool())
 
     val debug = new Bundle {
       val fetch0_ok          = Output(Bool())
@@ -144,10 +143,12 @@ class CL3Issue extends Module with CL3Config {
     pipes(i).io.in.issue.rs2 := slot_op(i).rs2
   }
 
-  val slot0_mismatch = Wire(Bool())
+  // val slot0_mismatch = Wire(Bool())
+  val slot1_mismatch = Wire(Bool())
 
-  pipes(0).io.in.flush := false.B // TODO: check this
-  pipes(1).io.in.flush := slot0_mismatch // TODO: check this
+  // pipes(0).io.in.flush := slot0_mismatch
+  pipes(0).io.in.flush := false.B
+  pipes(1).io.in.flush := slot1_mismatch
 
   pipes(0).io.in.flushWB := false.B
   pipes(1).io.in.flushWB := pipes(0).io.out.flush
@@ -278,7 +279,7 @@ class CL3Issue extends Module with CL3Config {
 
   val mispred = Wire(Bool())
   val e1_slot0_lsu = pipe_e1(0).isMem && pipe_e1(0).rdy_stage(1) && pipe_e1(0).commit
-  val e1_slot1_lsu = pipe_e1(1).isMem && pipe_e1(1).rdy_stage(1) && pipe_e1(1).commit && !mispred
+  val e1_slot1_lsu = pipe_e1(1).isMem && pipe_e1(1).rdy_stage(1) && pipe_e1(1).commit && !slot1_mismatch
   val e1_lsu_op    = Wire(new OpInfo)
   e1_lsu_op       := Mux(e1_slot1_lsu, OpInfo.fromPipe(pipe_e1(1)), OpInfo.fromPipe(pipe_e1(0)))
   e1_lsu_op.valid := e1_slot0_lsu || e1_slot1_lsu
@@ -335,43 +336,14 @@ class CL3Issue extends Module with CL3Config {
   // Branch
 
 
-  val slot_pred_q    = RegInit(VecInit(Seq.fill(2)(false.B)))
-  when(slot0_fire) {
-    slot_pred_q(0) := slot(0).bits.pred
-  }.otherwise{
-    slot_pred_q(0) := false.B
-  }
-  when(slot1_fire) {
-    slot_pred_q(1) := slot(1).bits.pred
-  }.otherwise{
-    slot_pred_q(1) := false.B
-  }
+  val single_issue_q = RegInit(false.B)
+  single_issue_q := Mux(single_issue, true.B, false.B)
 
-  val slot_br_q     = RegInit(VecInit(Seq.fill(2)(false.B)))
-  when(io.in.exec(0).br.valid) {
-    slot_br_q(0)  := true.B
-  }.otherwise{
-    slot_br_q(0) := false.B
-  }
+  val dual_issue_q = RegInit(false.B)
+  dual_issue_q := Mux(dual_issue, true.B, false.B)
 
-  when(io.in.exec(1).br.valid) {
-    slot_br_q(1)  := true.B
-  }.otherwise{
-    slot_br_q(1) := false.B
-  }
-  
-  val flag = RegInit(0.U(2.W))
 
-  when(single_issue) {
-    flag := 1.U
-  }.elsewhen(dual_issue) {
-    flag := 2.U
-  }.otherwise {
-    flag := 0.U
-  }
-
-  pc_q := MuxCase(
-    pc_q,
+  pc_q := PriorityMux(
     Seq(
       io.in.csr.br.valid     -> io.in.csr.br.pc,
       io.out.br.valid -> io.out.br.pc,
@@ -380,38 +352,27 @@ class CL3Issue extends Module with CL3Config {
       io.in.exec(1).br.valid -> io.in.exec(1).br.pc,
       dual_issue          -> (pc_q + 8.U),
       single_issue        -> (pc_q + 4.U),
+      true.B -> pc_q
     )
   )
 
-  val second_pc = RegInit(0.U(32.W))
-  when(dual_issue) {
-    second_pc := fetch1.bits.pc
-  }.otherwise{
-    second_pc := 0.U
-  }
+  val slot1_pc_q = RegEnable(fetch1.bits.pc, 0.U(32.W), dual_issue)
+
+  val slot1_pc_actual = Mux(io.in.exec(0).bp.valid && io.in.exec(0).bp.isTaken, io.in.exec(0).bp.target, io.in.exec(0).bp.source + 4.U)
+
+  // val slot0_pc_compare_q = RegNext(pc_q =/= fetch0.bits.pc)
+
+  // slot0_mismatch := slot0_pc_compare_q && (single_issue_q || dual_issue_q)
+  val slot0_mismatch = (pc_q =/= fetch0.bits.pc) && fetch0.valid
+  slot1_mismatch := (slot1_pc_q =/= slot1_pc_actual) && dual_issue_q
+
+  val next_pc = Mux(slot1_mismatch, slot1_pc_actual, pc_q)
 
 
-  val pc_mismatch = flag(1) && !slot_br_q(0) && second_pc =/= io.in.exec(0).bp.source + 4.U ||
-    slot_br_q(0) && second_pc =/= io.in.exec(0).bp.target
+  // mispred := slot0_mismatch || slot1_mismatch || pc_q =/= fetch0.bits.pc && fetch0.valid
+  mispred := slot1_mismatch || slot0_mismatch
 
-  val another_mismatch =
-    flag(1) && slot_br_q(1) && slot_pred_q(1) && fetch0.bits.pc =/= pc_q 
-
-  slot0_mismatch := (slot_br_q(0) ^ slot_pred_q(0)) || pc_mismatch
-  val slot1_mismatch = (slot_br_q(1) ^ slot_pred_q(1)) || another_mismatch
-
-  val next_pc = MuxCase(
-    pc_q,
-    Seq(
-      (flag(1) && !slot_pred_q(0) && slot_br_q(0)) -> io.in.exec(0).bp.target,
-      (flag(1) && slot_pred_q(0) && !slot_br_q(0)) -> (io.in.exec(0).bp.source + 4.U),
-      (flag(1) && pc_mismatch) -> io.in.exec(0).bp.target,
-    )
-  )
-
-  mispred := slot0_mismatch || slot1_mismatch || pc_mismatch
-
-  io.out.flush := slot0_mismatch && pipe_e1(1).isMem && pipe_e1(1).rdy_stage(0)
+  io.out.lsu_flush := slot1_mismatch && pipe_e1(1).isMem && pipe_e1(1).rdy_stage(0)
 
   io.out.br.valid := mispred || io.in.csr.br.valid
   io.out.br.pc    := Mux(io.in.csr.br.valid, io.in.csr.br.pc, next_pc)

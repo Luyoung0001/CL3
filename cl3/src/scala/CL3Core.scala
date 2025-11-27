@@ -31,14 +31,14 @@ class CL3Core extends Module with CL3Config {
   mmu.io.lsuIn.resp <> lsu.io.in.mem
   lsu.io.in.info <> issue.io.out.op(2)
   issue.io.in.lsu := lsu.io.out.info
-  lsu.io.in.flush := issue.io.out.flush
+  lsu.io.in.flush := issue.io.out.lsu_flush
 
   val csr = Module(new CL3CSR)
   csr.io.in.bootAddr := 0.U
   csr.io.in.irq      := false.B
   csr.io.in.info     := issue.io.out.op(5)
   csr.io.in.wb       := issue.io.out.csr
-  csr.io.in.bootAddr := BOOTADDR
+  csr.io.in.bootAddr := BOOT_ADDR
   issue.io.in.csr    := csr.io.out.info
   mmu.io.ctrl        := csr.io.out.mmu
 
