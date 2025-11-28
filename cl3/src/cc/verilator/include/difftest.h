@@ -2,6 +2,8 @@
 #define _DIFFTEST_H_
 
 #include "Vtop.h"
+#include <stdint.h>
+
 #define RESET_VECTOR 0x80000000U
 #define TRAP_VECTOR  0x20000000U
 #define UART_ADDR    0x10000000U
@@ -17,6 +19,8 @@
 
 #define COLOR_RED "\033[1;31m"
 #define COLOR_END "\033[0m"
+
+// // modify
 
 // #define GPR0  (topp->rootp->top__DOT__u_CL3Top__DOT__core__DOT__issue__DOT__rf__DOT__regs_0)
 // #define GPR1  (topp->rootp->top__DOT__u_CL3Top__DOT__core__DOT__issue__DOT__rf__DOT__regs_1)
@@ -122,9 +126,23 @@
   GET_GPR(31) \
 } while(0);
 
-#define MEPC (0)
-#define MTVEC (0)
-#define MCAUSE (0)
+#define MEPC    0x341
+#define MTVEC   0x305
+#define MCAUSE  0x342
+#define MSTATUS 0x300
+
+// EXCEPTION Registers
+#define MEPC_R    (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mepc_q)
+#define MTVEC_R   (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mtvec_q)
+#define MCAUSE_R  (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mcause_q)
+#define MSTATUS_R (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_sr_q)
+
+#define GET_ALL_CSR do { \
+  dut.csr[0] = MEPC_R; \
+  dut.csr[1] = MCAUSE_R; \
+  dut.csr[2] = MTVEC_R; \
+  dut.csr[3] = MSTATUS_R; \
+} while(0);
 
 enum { DIFFTEST_TO_DUT, DIFFTEST_TO_REF };
 
@@ -138,6 +156,9 @@ typedef struct context {
 // Note: The layout of this struct must be kept consistent with the SystemVerilog definition.
 #pragma pack(push, 1)
 typedef struct _diff_info_t {
+  uint16_t csr_waddr;
+  uint32_t csr_wdata;
+  uint16_t csr_wen;
   uint16_t skip;
   uint16_t commit;
   uint32_t wdata;
@@ -148,6 +169,25 @@ typedef struct _diff_info_t {
   uint32_t pc;
 } difftest_info_t; 
 #pragma pack(pop)
+
+// #pragma pack(push, 1)
+// typedef struct {
+//   uint32_t pc;
+//   uint32_t npc;
+//   uint32_t inst;
+//   uint16_t rdIdx;
+//   uint16_t wen;
+//   uint32_t wdata;
+//   uint16_t commit;
+//   uint16_t skip;
+//   uint16_t csr_wen;
+//   uint32_t csr_wdata;
+//   uint16_t csr_waddr;
+// } difftest_info_t;
+// #pragma pack(pop)
+
+// _Static_assert(sizeof(difftest_info_t) == 36, "difftest_info_t must be 36 bytes");
+
 
 #ifdef __cplusplus
 extern "C" {

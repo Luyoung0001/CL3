@@ -12,6 +12,10 @@ class DiffInfo extends Bundle {
   val wdata  = UInt(32.W)
   val commit = Bool()
   val skip   = Bool()
+  val csr_wen   = Bool()
+  val csr_wdata = UInt(32.W)
+  val csr_waddr = UInt(12.W)
+
 }
 
 class Difftest extends BlackBox with HasBlackBoxResource {

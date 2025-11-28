@@ -22,7 +22,6 @@ class dcache_axi_axi(p: DCacheParams) extends Module {
 //-------------------------------------------------------------
     val awvalid_inhibit_q = RegInit(false.B)
     val wvalid_inhibit_q = RegInit(false.B)
-    dontTouch(wvalid_inhibit_q)
     when(out_aw.fire && out_w.valid && !out_w.ready) {
         awvalid_inhibit_q := true.B
     } .elsewhen(out_aw.fire && (out_aw.bits.len =/= 0.U)) {

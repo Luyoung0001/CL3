@@ -7,11 +7,6 @@ class dcache_axi(p: DCacheParams) extends Module {
     val io = IO(new DCacheAxiIO(p))
 
     val (req, resp, ar, aw, w, r, b) = (io.pmem.req, io.pmem.resp, io.axi.ar, io.axi.aw, io.axi.w, io.axi.r, io.axi.b)
-    dontTouch(ar)
-    dontTouch(r)
-    dontTouch(aw)
-    dontTouch(w)
-    dontTouch(b)
     val u_axi = Module(new dcache_axi_axi(p))
     val accept_w = u_axi.io.pmem.resp.accept
 

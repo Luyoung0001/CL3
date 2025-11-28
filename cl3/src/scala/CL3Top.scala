@@ -8,13 +8,15 @@ class CL3Top extends Module with CL3Config {
   val io = IO(new Bundle {
     val extIrq   = Input(Bool())
     val timerIrq = Input(Bool())
-    val master   = new SimpleAXI4MasterBundle(ADDR_WIDTH, DATA_WIDTH, 4)
+    // val master   = new SimpleAXI4MasterBundle(AddrWidth, DataWidth, 4)
+    val master   = new SimpleAXI4MasterBundle(ADDR_WIDTH = 32, DATA_WIDTH = 32, ID_WIDTH = 4)
+    // val slave    = Flipped(new SimpleAXI4MasterBundle(ADDR_WIDTH = 32, DATA_WIDTH = 32, ID_WIDTH = 4))
   })
-
   implicit val axiP: AXI4Params = AXI4Params()
   val dp: DCacheParams = DCacheParams()
   val ip: ICacheParams = ICacheParams()
   val core = Module(new CL3Core)
+  core.io := DontCare
 
   if (SimMemOption == "SoC") {
     val icache = Module(new ICache(ip))
@@ -22,8 +24,6 @@ class CL3Top extends Module with CL3Config {
     core.io.imem.req.ready          := icache.io.cpu.resp_accept
     icache.io.cpu.req_pc            := core.io.imem.req.bits.addr
     icache.io.cpu.req_flush := core.io.imem.req.bits.flush
-    dontTouch(core.io.imem.req.bits.flush)
-    dontTouch(icache.io.cpu.req_flush)
     icache.io.cpu.req_invalidate := core.io.imem.req.bits.invalidate
 
     core.io.imem.resp.valid      := icache.io.cpu.resp_valid
@@ -54,7 +54,7 @@ class CL3Top extends Module with CL3Config {
 
     val clint = Module(new CL3CLINT)
     val xbar  = Module(new CL3Xbar)
-    dontTouch(clint.io.irq)
+    core.io.timer_irq := clint.io.irq
     
     clint.io.axi <> xbar.io.clint
     io.master    <> xbar.io.top
@@ -100,8 +100,7 @@ class CL3Top extends Module with CL3Config {
     u_arbiter.io.mem_axi.r.bits.id   := xbar.io.xbar.r.bits.rid
     xbar.io.xbar.r.ready             := u_arbiter.io.mem_axi.r.ready
 
-
-  }  else {
+  } else {
 
     val imem = Module(new MemHelper)
     imem.io.clock          := clock

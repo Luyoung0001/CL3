@@ -387,12 +387,32 @@ object CL3InstInfo {
       opcode = BitPat("b0001111")
     ),
     InstructionPattern(
-      instType = "I",
+      instType = "CSR",
       opType = "CSR",
-      name = "ecall/ebreak",
+      name = "ecall",
+      func7 = BitPat("b0000000"),
+      sysCode = BitPat("b00000"),
+      func3 = BitPat("b000"),
+      opcode = BitPat("b1110011")
+    ),
+    InstructionPattern(
+      instType = "CSR",
+      opType = "CSR",
+      name = "ebreak",
+      func7 = BitPat("b0000000"),
+      sysCode = BitPat("b00001"),
+      func3 = BitPat("b000"),
+      opcode = BitPat("b1110011")
+    ),
+    InstructionPattern(
+      instType = "CSR",
+      opType = "CSR",
+      name = "mret",
+      func7 = BitPat("b0011000"),
       func3 = BitPat("b000"),
       opcode = BitPat("b1110011")
     )
+
   )
 
   val allFields = Seq(
@@ -406,7 +426,8 @@ object CL3InstInfo {
     MULField,
     DIVField,
     CSRField,
-    BRField
+    BRField,
+    ValidField
   )
 
 }

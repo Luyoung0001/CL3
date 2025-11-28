@@ -89,7 +89,8 @@ class CL3Fetch() extends Module with CL3Config {
   io.mem.req.bits.addr       := icache_pc(31, 2) ## 0.U(2.W)
   io.mem.req.bits.flush      := false.B //TODO:
   io.mem.req.bits.invalidate := false.B
-
+  io.mem.req.bits.pc         := icache_pc // TODO:
+    
   val skid_buffer_q = RegInit(0.U.asTypeOf(new FERawInfo))
   val skid_valid_q  = RegInit(false.B)
 
@@ -110,6 +111,8 @@ class CL3Fetch() extends Module with CL3Config {
   io.de.bits.pc   := Mux(skid_valid_q, skid_buffer_q.pc, fetch_pc)
   io.de.bits.inst := Mux(skid_valid_q, skid_buffer_q.inst, io.mem.resp.bits.rdata)
   io.de.bits.pred := Mux(skid_valid_q, skid_buffer_q.pred, last_pred_q)
+  io.de.bits.fault_fetch := Mux(skid_valid_q, skid_buffer_q.fault_fetch, io.mem.resp.bits.err)
+  io.de.bits.fault_page  := false.B
 
   // TODO: add trap support
 

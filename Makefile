@@ -59,6 +59,8 @@ BIN := $(BUILD_DIR)/$(VTOP)
 
 # TODO: use systemverilog top 
 # TODO: add iverilog support
+# 	-CFLAGS -g \
+
 ifeq ($(VCC), verilator)
 	VF := $(addprefix +incdir+, $(RTLSRC_INCDIR)) \
 	--Wno-lint --Wno-UNOPTFLAT --Wno-BLKANDNBLK --Wno-COMBDLY --Wno-MODDUP \
@@ -104,10 +106,13 @@ $(BIN): $(RTLSRC_CPU) $(RTLSRC_PERIP) $(RTLSRC_INTERCON) $(RTLSRC_TOP)
 
 bin: $(BIN)
 
-REF ?= /home/chen/Templates/ict_project/CL3/utils/csr-spike-so
-WAVE_TYPE := $(if $(filter $(VCC),vcs),fsdb,fst)
-
+REF ?= ./utils/csr-spike-so
+WAVE_TYPE ?= fst
 RUN_ARGS += +firmware=$(IMAGE).mem
+
+RUN_ARGS += --diff
+RUN_ARGS += --ref=$(REF)
+RUN_ARGS += --image=$(IMAGE).bin
 
 ifeq ($(VCC),vcs)
 	RUN_ARGS += +ref=$(REF)
@@ -117,6 +122,7 @@ else ifeq ($(VCC),verilator)
 	RUN_ARGS += --ref=$(REF)
 	RUN_ARGS += --image=$(IMAGE).bin
 endif
+
 
 ifneq ($(DUMP_WAVE),)
 RUN_ARGS += +$(WAVE_TYPE)

@@ -52,7 +52,9 @@ static unsigned int load_img(const char *path) {
 long long mem_read(uint32_t raddr, uint32_t size) {
 
   if (raddr < RESET_VECTOR || (raddr - RESET_VECTOR >= PMEM_SIZE)) {
-    printf("raddr is %x\n", raddr);
+    // printf("raddr is %x\n", raddr);
+    // assert(0);
+
     return 0;
     //  assert(0);
   }
@@ -99,10 +101,11 @@ void mem_write(uint32_t waddr, uint32_t mask, uint32_t wdata) {
 
 void difftest_init(const Vtop *p, const char *ref_so_file,
                    const char *img_file) {
+// void difftest_init(const char *ref_so_file, const char *img_file) { // vcs
   printf("[DIFFTEST] init ...\n");
+  printf("%s\n", img_file);
   topp = p;
   assert(topp);
-
   // Initialize all difftest function pointers
   void *handle;
   handle = dlopen(ref_so_file, RTLD_LAZY);
@@ -122,28 +125,65 @@ void difftest_init(const Vtop *p, const char *ref_so_file,
 
   // Initialize DUT and local REF state
   dut.pc = RESET_VECTOR;
+  dut.csr[3] = 0x1800;
   ref.pc = RESET_VECTOR;
-  ref.csr[2] = TRAP_VECTOR;
+  // ref.csr[2] = TRAP_VECTOR;
 
   // Initialize remote REF state
   ref_difftest_regcpy((void *)&ref, DIFFTEST_TO_REF);
   printf("[DIFFTEST] finish initialization\n");
   printf("[DIFFTEST] image name: %s, image size : %ld\n", img_file, size);
+
+
 }
 
-void update_dut_state() { GET_ALL_GPR }
+
+void update_dut_state(){
+  GET_ALL_GPR
+  GET_ALL_CSR
+}
+
+void update_dut_csr(int wen, uint16_t waddr, uint32_t wdata) {
+  if (wen) {
+    switch (waddr) {
+      case MEPC:
+        dut.csr[0] = wdata;
+        break;
+      case MCAUSE:
+        dut.csr[1] = wdata;
+        break;
+      case MTVEC:
+        dut.csr[2] = wdata;
+        break;
+      case MSTATUS:
+        dut.csr[3] = wdata;
+        break;
+      default:
+        printf("CSR write addr error: %x\n", waddr);
+        break;
+    }
+  }
+  
+}
 
 // the parameter type is 'svOpenArrayHandle' in Verilator
 int difftest_step(int n, svOpenArrayHandle info) {
 
   difftest_info_t *diff_info_ptr = (difftest_info_t *)svGetArrayPtr(info);
 
-
   int i;
   uint32_t npc;
   for (i = 0; i < n; i++) {
     if (diff_info_ptr[i].commit) {
 
+      // printf("CSR write: wen=%d, waddr=%x, wdata=%x\n", diff_info_ptr[i].csr_wen, diff_info_ptr[i].csr_waddr, diff_info_ptr[i].csr_wdata);
+      // printf("skip=%d\n", diff_info_ptr[i].skip);
+      // printf("PC check: DUT pc=%x, REF pc=%x, NPC=%x\n", diff_info_ptr[i].pc, ref.pc, diff_info_ptr[i].npc);
+      // printf("inst=%x\n", diff_info_ptr[i].inst);
+      // printf("rdIdx=%d, wen=%d, wdata=%x\n", diff_info_ptr[i].rdIdx, diff_info_ptr[i].wen, diff_info_ptr[i].wdata);
+
+      update_dut_csr(diff_info_ptr[i].csr_wen, diff_info_ptr[i].csr_waddr, diff_info_ptr[i].csr_wdata);
+      
       if(diff_info_ptr[i].skip) {
         update_dut_state();
         dut.pc = diff_info_ptr[i].npc;
@@ -158,14 +198,13 @@ int difftest_step(int n, svOpenArrayHandle info) {
       if (ref.pc != npc) {
         printf(COLOR_RED "[DIFFTEST] Mismatch in PC %0#x: "
                          "DUT's NPC is different from REF's. "
-                         "DUT's NPC is %0#x, REF's NPC is %0#x. "
+                         "REF's is %0#x "
                          "Maybe there is an wrong branch/jump/CSR Instruction"
                          "or trap.\n" COLOR_END,
-               diff_info_ptr[i].pc, npc, ref.pc);
+               diff_info_ptr[i].pc, ref.pc);
 
         return 1;
       }
-
       // GPR Check
       uint32_t wdata = diff_info_ptr[i].wdata;
       uint16_t rdIdx = diff_info_ptr[i].rdIdx;
@@ -177,11 +216,11 @@ int difftest_step(int n, svOpenArrayHandle info) {
 
         return 1;
       }
+
     }
   }
 
   // Double Check
-
   update_dut_state();
   int gpr_mask = 0;
   for (int i = 0; i < GPR_NUM; i++) {
@@ -193,6 +232,15 @@ int difftest_step(int n, svOpenArrayHandle info) {
     }
   }
 
+  for (int i = 0; i < 4; i++) {
+    if (dut.csr[i] != ref.csr[i]) {
+      printf(COLOR_RED
+             "[DIFFTEST] CSR[%d]: DUT is %0#x, REF is %0#x\n" COLOR_END,
+             i, dut.csr[i], ref.csr[i]);
+      gpr_mask |= (1U << (i + GPR_NUM));
+    }
+  }
+
   if (gpr_mask) {
     printf(COLOR_RED
            "[DIFFTEST] Mismatch in double check: "
@@ -200,7 +248,6 @@ int difftest_step(int n, svOpenArrayHandle info) {
 
     return 1;
   }
-
   return 0;
 }
 

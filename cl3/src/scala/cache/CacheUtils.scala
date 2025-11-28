@@ -18,3 +18,18 @@ object SramAddr {
         Cat((0 until bytes).reverse.map(i => Fill(8, !byteMask(i))))
     }
 }
+
+object DCacheState extends ChiselEnum {
+  val STATE_RESET,
+      STATE_FLUSH_ADDR,
+      STATE_FLUSH,
+      STATE_LOOKUP,
+      STATE_READ,
+      STATE_WRITE,
+      STATE_REFILL,
+      STATE_EVICT,
+      STATE_EVICT_WAIT,
+      STATE_INVALIDATE,
+      STATE_WRITEBACK,
+      STATE_AMOCOMPUTE = Value
+}

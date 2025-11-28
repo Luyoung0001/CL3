@@ -4,8 +4,11 @@ import chisel3._
 import chisel3.util._
 
 class CoreIO extends Bundle {
-  val imem = new CL3ICacheIO
-  val dmem = new CL3DCacheIO
+  val imem       = new CL3ICacheIO
+  val dmem       = new CL3DCacheIO
+  val ext_irq    = Input(Bool())
+  val timer_irq  = Input(Bool())
+
 }
 
 class CL3Core extends Module with CL3Config {
@@ -23,7 +26,6 @@ class CL3Core extends Module with CL3Config {
   issue.io.in.fetch <> frontend.io.out
   frontend.io.bp  := issue.io.out.bp
   frontend.io.br  := issue.io.out.br
-  issue.io.in.irq := false.B
 
   val lsu = Module(new CL3LSU)
   lsu.io.in.mem   := mmu.io.lsuIn.resp
@@ -34,13 +36,20 @@ class CL3Core extends Module with CL3Config {
   lsu.io.in.flush := issue.io.out.lsu_flush
 
   val csr = Module(new CL3CSR)
-  csr.io.in.bootAddr := 0.U
-  csr.io.in.irq      := false.B
   csr.io.in.info     := issue.io.out.op(5)
   csr.io.in.wb       := issue.io.out.csr
   csr.io.in.bootAddr := BOOT_ADDR
   issue.io.in.csr    := csr.io.out.info
   mmu.io.ctrl        := csr.io.out.mmu
+  // TODO
+  csr.io.in.ext_irq     := false.B
+  csr.io.in.timer_irq   := io.timer_irq
+  // csr.io.in.invalid     := false.B
+  csr.io.in.irq_inhibit := false.B
+
+  issue.io.in.irq := csr.io.out.irq
+
+
 
   val mul = Module(new CL3MUL)
   mul.io.in.hold         := issue.io.out.hold
