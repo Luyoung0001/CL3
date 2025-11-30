@@ -15,12 +15,13 @@ case class InstructionPattern(
   val opType:   String, // TODO: change to enum
   val name:     String,
   val func7:    BitPat = BitPat.dontCare(7),
+  val sysCode:  BitPat = BitPat.dontCare(5),
   val func3:    BitPat = BitPat.dontCare(3),
   val opcode:   BitPat)
     extends DecodePattern {
   def bitPat: BitPat = pattern
 
-  val pattern = func7 ## BitPat.dontCare(10) ## func3 ## BitPat.dontCare(5) ## opcode
+  val pattern = func7 ## sysCode ## BitPat.dontCare(5) ## func3 ## BitPat.dontCare(5) ## opcode
 
 }
 
@@ -106,6 +107,8 @@ object OP1Field extends DecodeField[InstructionPattern, UInt] {
       case "B" => b
       case "S" => BitPat(OP1_REG)
       case "R" => BitPat(OP1_REG)
+      case "M" => BitPat(OP1_REG)
+      case "CSR" => BitPat(OP1_REG)
       case _   => BitPat.dontCare(OP1_WIDTH)
     }
   }
@@ -140,6 +143,7 @@ object IllegalField extends BoolDecodeField[InstructionPattern]   {
       case "B"    => BitPat(false.B)
       case "S"    => BitPat(false.B)
       case "U"    => BitPat(false.B)
+      case "CSR"  => BitPat(false.B)
       case _      => BitPat(true.B)
     }
   }
@@ -224,12 +228,22 @@ object BRField extends BoolDecodeField[InstructionPattern] {
   }
 }
 
+object ValidField extends BoolDecodeField[InstructionPattern] {
+  def name: String = "Valid instruction flag"
+
+  def genTable(op: InstructionPattern): BitPat = {
+    BitPat(true.B)
+  }
+}
+
 class CL3Decoder extends Module {
 
   val io = IO(new Bundle {
     val inst  = Input(UInt(32.W))
     val pc    = Input(UInt(32.W))
     val pred  = Input(Bool())
+    val fault_fetch = Input(Bool()) 
+    val fault_page  = Input(Bool())
     val out   = Output(new DEInfo())
   })
 
@@ -237,23 +251,29 @@ class CL3Decoder extends Module {
 
   val decodeTable  = new DecodeTable(instPatterns, allFields)
   val decodeResult = decodeTable.decode(io.inst)
+  val hasMatch     = decodeResult(ValidField).asBool
 
   io.out.uop.op0 := decodeResult(OP0Field)
   io.out.uop.op1 := decodeResult(OP1Field)
   io.out.uop.op2 := decodeResult(OP2Field)
-  io.out.illegal := decodeResult(IllegalField)
+  io.out.illegal := decodeResult(IllegalField) || !hasMatch
   io.out.wen     := decodeResult(WENField)
   io.out.isLSU   := decodeResult(LSUField)
   io.out.isMUL   := decodeResult(MULField)
   io.out.isDIV   := decodeResult(DIVField)
-  io.out.isCSR   := decodeResult(CSRField)
   io.out.isEXU   := decodeResult(EXUField)
   io.out.isBr    := decodeResult(BRField)
+
+  val isCSR_W     = decodeResult(CSRField)
+  io.out.isCSR := isCSR_W || io.out.illegal || io.fault_fetch
+
 
   io.out.inst := io.inst
 
   // TODO: use BoringUtil API
   io.out.pc    := io.pc
   io.out.pred  := io.pred
+  io.out.fault_fetch := io.fault_fetch
+  io.out.fault_page := io.fault_page
 
 }

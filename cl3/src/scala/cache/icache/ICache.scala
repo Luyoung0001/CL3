@@ -21,8 +21,7 @@ class ICache(p: ICacheParams) extends Module with CL3Config {
     ar.bits  := 0.U.asTypeOf(io.axi.ar.bits)
     b.ready  := true.B
     r.ready  := true.B
-    dontTouch(ar)
-    dontTouch(r)
+
     val STATE_W = 2
     val states = Enum(4)
     val STATE_FLUSH    = states(0)
@@ -32,7 +31,6 @@ class ICache(p: ICacheParams) extends Module with CL3Config {
     // val STATE_DONE     = states(4)
     val state_q = RegInit(STATE_FLUSH)
     val next_state_r = WireDefault(state_q)
-    dontTouch(next_state_r)
     
     val states_p1 = Enum(4)
     val STATE_LOOKUP_P1   = states_p1(0)
@@ -83,7 +81,6 @@ class ICache(p: ICacheParams) extends Module with CL3Config {
 //-----------------------------------------------------------------
     val tag_addr_r = Wire(UInt(p.tagReqLineW.W))
     tag_addr_r := flush_addr_q
-    dontTouch(tag_addr_r)
 
 // Tag RAM address
 
@@ -114,7 +111,6 @@ class ICache(p: ICacheParams) extends Module with CL3Config {
     // val tag0_data_out_w = Wire(UInt(p.tagRamDataBits.W))
     // val tag1_data_out_w = Wire(UInt(p.tagRamDataBits.W))
     val tag_data_out_w  = Wire(Vec(p.numWays, UInt(p.tagRamDataBits.W)))
-    dontTouch(tag_data_out_w)
     val tag0_valid_w    = tag_data_out_w(0)(p.cacheTagValidBit)
     val tag0_addr_bits_w = tag_data_out_w(0)(p.cacheTagAddrBits, 0)
     val tag1_valid_w    = tag_data_out_w(1)(p.cacheTagValidBit)
@@ -245,7 +241,6 @@ class ICache(p: ICacheParams) extends Module with CL3Config {
 // Second port for unaligned access
 
     state_p1_q := next_state_p1_r
-    dontTouch(next_state_p1_r)
 
     val unaligned_Reg = RegInit(false.B)
     val crossLineReg = RegInit(false.B)
@@ -286,7 +281,6 @@ class ICache(p: ICacheParams) extends Module with CL3Config {
 //-----------------------------------------------------------------
     // val req_line_addr_p1_w = cpu.req_pc(p.tagReqLineH, p.tagReqLineL)
     val tag_addr_p1_r = Wire(UInt(p.tagReqLineW.W))
-    dontTouch(tag_addr_p1_r)
 
 // Tag RAM address
 
@@ -306,7 +300,6 @@ class ICache(p: ICacheParams) extends Module with CL3Config {
     }
 // Tag RAM write enable
     val tag_data_out_p1_w  = Wire(Vec(p.numWays, UInt(p.tagRamDataBits.W)))
-    dontTouch(tag_data_out_p1_w)
     val tag0_valid_p1_w    = tag_data_out_p1_w(0)(p.cacheTagValidBit)
     val tag0_addr_bits_p1_w = tag_data_out_p1_w(0)(p.cacheTagAddrBits, 0)
     val tag1_valid_p1_w    = tag_data_out_p1_w(1)(p.cacheTagValidBit)
@@ -435,7 +428,6 @@ class ICache(p: ICacheParams) extends Module with CL3Config {
     }
 
     val inst_p1_r = Wire(UInt(p.instBits.W))
-    dontTouch(inst_p1_r)
     inst_p1_r := data_out_p1(0)
     when(tag0_hit_p1_w){
         inst_p1_r := data_out_p1(0)

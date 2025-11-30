@@ -9,22 +9,8 @@ class dcache_core(p: DCacheParams) extends Module {
     val (cpureq, cpuresp, pmemreq, pmemresp) = (io.cpu.req, io.cpu.resp, io.pmem.req, io.pmem.resp)
     val amo = io.amo
 
-    val states = Enum(12)
-
-    val STATE_RESET      = states(0)
-    val STATE_FLUSH_ADDR = states(1)
-    val STATE_FLUSH      = states(2)
-    val STATE_LOOKUP     = states(3)
-    val STATE_READ       = states(4)
-    val STATE_WRITE      = states(5)
-    val STATE_REFILL     = states(6)
-    val STATE_EVICT      = states(7)
-    val STATE_EVICT_WAIT = states(8)
-    val STATE_INVALIDATE = states(9)
-    val STATE_WRITEBACK  = states(10)
-    val STATE_AMOCOMPUTE = states(11)
-
-
+    // val states = Enum(12)
+    import DCacheState._
     val state_q = RegInit(STATE_RESET)
     val next_state_r = WireDefault(state_q)
 //-----------------------------------------------------------------
@@ -166,7 +152,6 @@ class dcache_core(p: DCacheParams) extends Module {
     // val tag0_data_out_w = Wire(UInt(p.tagDataW.W))
     // val tag1_data_out_w = Wire(UInt(p.tagDataW.W))
     val tag_data_out_w = Wire(Vec(p.ways, UInt(p.tagDataW.W)))
-    dontTouch(tag_data_out_w)
     val tag0_valid_m_w    = tag_data_out_w(0)(p.tagValidBit)
     val tag0_dirty_m_w    = tag_data_out_w(0)(p.tagDirtyBit)
     val tag0_addr_bits_m_w = tag_data_out_w(0)(p.cacheTagAddrBits - 1, 0)
@@ -313,61 +298,29 @@ class dcache_core(p: DCacheParams) extends Module {
     // -------------------------------
 // Data RAM write enable (way 0)
 // reg [3:0] data0_write_m_r;
-    val data0_write_m_r = Wire(UInt(4.W))
-    val data1_write_m_r = Wire(UInt(4.W))
-    dontTouch(data0_write_m_r)
-    dontTouch(data1_write_m_r)
+    val u_data = Seq.fill(p.ways)(Module(new dcache_core_data_ram(p)))
+    for (i <- 0 until p.ways){
+        val data_write_m_r = WireDefault(0.U(4.W))
+        when (state_q === STATE_REFILL) {
+            data_write_m_r := Mux(pmem_ack_w && (replace_way_q === i.U), "b1111".U(4.W), "b0000".U(4.W))
+        } .elsewhen (state_q === STATE_WRITE || state_q === STATE_LOOKUP) {
+            data_write_m_r := Mux(mem_amo_m_q, "b1111".U(4.W), mem_wr_m_q) & Fill(4, tag_hit_m_w(i))
+        }
 
-    data0_write_m_r := 0.U
-
-    when (state_q === STATE_REFILL) {
-        data0_write_m_r := Mux(pmem_ack_w && (replace_way_q === 0.U), "b1111".U(4.W), "b0000".U(4.W))
-    } .elsewhen (state_q === STATE_WRITE || state_q === STATE_LOOKUP) {
-        data0_write_m_r := Mux(mem_amo_m_q, "b1111".U(4.W), mem_wr_m_q) & Fill(4, tag_hit_m_w(0))
-
+        val data_in_m_w =  Mux(state_q === STATE_REFILL, pmem_read_data_w, 
+                           Mux(mem_amo_m_q, atoData, mem_data_m_q))
+        u_data(i).io.p0.addr  := data_addr_x_r
+        u_data(i).io.p0.wdata := 0.U(32.W)
+        u_data(i).io.p0.wstrb := 0.U(4.W)
+        u_data(i).io.p1.addr  := data_addr_m_r
+        u_data(i).io.p1.wdata := data_in_m_w
+        u_data(i).io.p1.wstrb := data_write_m_r
+        if(i == 0){
+            data0_data_out_m_w := u_data(i).io.p0.rdata
+        } else{
+            data1_data_out_m_w := u_data(i).io.p0.rdata
+        }
     }
-
-    val data0_data_in_m_w  = Wire(UInt(32.W))
-    data0_data_in_m_w := Mux(state_q === STATE_REFILL, pmem_read_data_w, 
-                        Mux(mem_amo_m_q, atoData, mem_data_m_q))
-
-    val u_data0 = Module(new dcache_core_data_ram(p))
-    // Read
-    u_data0.io.p0.addr := data_addr_x_r
-    u_data0.io.p0.wdata := 0.U(32.W)
-    u_data0.io.p0.wstrb   := 0.U(4.W)
-    data0_data_out_m_w := u_data0.io.p0.rdata
-    // Write
-    u_data0.io.p1.addr := data_addr_m_r
-    u_data0.io.p1.wdata := data0_data_in_m_w
-    u_data0.io.p1.wstrb   := data0_write_m_r
-
-    // -------------------------------
-    // Data RAM write enable (way 1)
-    // reg [3:0] data1_write_m_r;
-    
-    data1_write_m_r := 0.U
-    when (state_q === STATE_REFILL) {
-        data1_write_m_r := Mux(pmem_ack_w && (replace_way_q === 1.U), "b1111".U(4.W), "b0000".U(4.W))
-    } .elsewhen (state_q === STATE_WRITE || state_q === STATE_LOOKUP) {
-        data1_write_m_r := Mux(mem_amo_m_q, "b1111".U(4.W), mem_wr_m_q) & Fill(4, tag_hit_m_w(1))
-
-    }
-
-    val data1_data_in_m_w  = Wire(UInt(32.W))
-    data1_data_in_m_w := Mux(state_q === STATE_REFILL, pmem_read_data_w, 
-                        Mux(mem_amo_m_q, atoData, mem_data_m_q))
-
-    val u_data1 = Module(new dcache_core_data_ram(p))
-    // Read
-    u_data1.io.p0.addr := data_addr_x_r
-    u_data1.io.p0.wdata := 0.U(32.W)
-    u_data1.io.p0.wstrb := 0.U(4.W)
-    data1_data_out_m_w := u_data1.io.p0.rdata
-    // Write
-    u_data1.io.p1.addr := data_addr_m_r
-    u_data1.io.p1.wdata := data1_data_in_m_w
-    u_data1.io.p1.wstrb := data1_write_m_r
 
 //-----------------------------------------------------------------
 // Flush counter
