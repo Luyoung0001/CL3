@@ -2,7 +2,7 @@ package cl3
 
 import chisel3._
 import chisel3.util._
-
+import chisel3.util.random.GaloisLFSR
 
 class BTBEntry extends Bundle {
   val target = UInt(32.W)
@@ -11,49 +11,63 @@ class BTBEntry extends Bundle {
   val isJmp  = Bool()
 }
 
-class CL3BTB(width: Int) extends Module {
-    val io = IO(new Bundle {
-
-        val rdTag0 = Input(UInt((30 - width).W))
-        val rdIdx0 = Input(UInt(width.W))
-        val rdata0 = Output(new BTBEntry)
-        val hit0   = Output(Bool())
-
-        val rdTag1 = Input(UInt((30 - width).W))
-        val rdIdx1 = Input(UInt(width.W))
-        val rdata1 = Output(new BTBEntry)
-        val hit1   = Output(Bool())
-
-        val waddr  = Input(UInt(32.W))
-        val wdata  = Input(new BTBEntry)
-        val wen    = Input(Bool())
-
-    })
-
-    dontTouch(io)
-
-    val tagTable  = RegInit(VecInit(Seq.fill(1 << width)(0.U((30 - width).W))))
-    val dataTable = RegInit(VecInit(Seq.fill(1 << width)(0.U.asTypeOf(new BTBEntry))))
-
-    val rdata0 = dataTable(io.rdIdx0)
-    val rdata1 = dataTable(io.rdIdx1)
-
-    val tag0 = tagTable(io.rdIdx0)
-    val tag1 = tagTable(io.rdIdx1)
-
-    io.hit0 := tag0 === io.rdTag0
-    io.hit1 := tag1 === io.rdTag1
-
-    io.rdata0 := rdata0
-    io.rdata1 := rdata1
-
-    val wTag = io.waddr(31, width + 2)
-    val wIdx = io.waddr(width + 1, 2)
-
-    when(io.wen) {
-        dataTable(wIdx) := io.wdata
-        tagTable(wIdx)  := wTag
-    }
+class BTBRdPort extends Bundle {
+  val pc    = Input(UInt(30.W)) // PC[31:2]
+  val hit   = Output(Bool())
+  val rdata = Output(new BTBEntry)
 }
 
+class BTBWrPort extends Bundle {
+  val pc    = Input(UInt(30.W)) // PC[31:2]
+  val wdata = Input(new BTBEntry)
+  val wen   = Input(Bool())
+}
 
+/* Fully Associative BTB */
+class CL3BTB( num: Int) extends Module {
+  val io = IO(new Bundle {
+    val rd = Vec(2, new BTBRdPort)
+    val wr = new BTBWrPort
+  })
+
+  class BTBPhysicalEntry extends Bundle {
+    val valid  = Bool()
+    val tag    = UInt(29.W) 
+    val offset = Bool()
+    val data   = new BTBEntry
+  }
+
+  val entries = RegInit(VecInit(Seq.fill(num)(0.U.asTypeOf(new BTBPhysicalEntry))))
+
+  val lfsr = GaloisLFSR.maxPeriod(log2Ceil(num))
+  val replaceIdx = lfsr
+
+  for (i <- 0 until 2) {
+    val reqTag = io.rd(i).pc(29, 1)
+    val reqOff = io.rd(i).pc(0)
+    val hits = VecInit(entries.map { e =>
+      e.valid && (e.tag === reqTag) && (e.offset === reqOff)
+    })
+    io.rd(i).hit := hits.asUInt.orR
+    io.rd(i).rdata := Mux1H(hits, entries.map(_.data))
+  }
+
+  val wrTag = io.wr.pc(29, 1)
+  val wrOff = io.wr.pc(0)
+
+  val writeHits = VecInit(entries.map { e =>
+    e.valid && (e.tag === wrTag) && (e.offset === wrOff)
+  })
+  val exists = writeHits.asUInt.orR
+  val hitIdx = OHToUInt(writeHits)
+
+  when(io.wr.wen && exists) {
+      entries(hitIdx).data := io.wr.wdata
+  }.elsewhen(io.wr.wen && !exists) {
+      entries(replaceIdx).valid  := true.B
+      entries(replaceIdx).tag    := wrTag
+      entries(replaceIdx).offset := wrOff
+      entries(replaceIdx).data   := io.wr.wdata
+  }
+
+}

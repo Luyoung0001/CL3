@@ -7,7 +7,7 @@ import chisel3.util.experimental.decode
 object CL3InstInfo {
   val instPatterns = Seq(
     // EXEC (General-Purpose Execution Instructions)
-    InstructionPattern(instType = "U", opType = "EXEC", name = "lui", opcode = BitPat("b0110111")),
+    InstructionPattern(instType = "U", opType = "EXEC", name = "lui",   opcode = BitPat("b0110111")),
     InstructionPattern(instType = "U", opType = "EXEC", name = "auipc", opcode = BitPat("b0010111")),
     InstructionPattern(
       instType = "I",
@@ -387,7 +387,7 @@ object CL3InstInfo {
       opcode = BitPat("b0001111")
     ),
     InstructionPattern(
-      instType = "CSR",
+      instType = "I",
       opType = "CSR",
       name = "ecall",
       func7 = BitPat("b0000000"),
@@ -396,7 +396,7 @@ object CL3InstInfo {
       opcode = BitPat("b1110011")
     ),
     InstructionPattern(
-      instType = "CSR",
+      instType = "I",
       opType = "CSR",
       name = "ebreak",
       func7 = BitPat("b0000000"),
@@ -405,14 +405,13 @@ object CL3InstInfo {
       opcode = BitPat("b1110011")
     ),
     InstructionPattern(
-      instType = "CSR",
+      instType = "I",
       opType = "CSR",
       name = "mret",
       func7 = BitPat("b0011000"),
       func3 = BitPat("b000"),
       opcode = BitPat("b1110011")
     )
-
   )
 
   val allFields = Seq(
@@ -427,7 +426,6 @@ object CL3InstInfo {
     DIVField,
     CSRField,
     BRField,
-    ValidField
   )
 
 }

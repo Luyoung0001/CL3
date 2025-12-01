@@ -191,6 +191,7 @@ class PipeCSRInput extends Bundle {
   val wdata  = Input(UInt(32.W))
   val except = Input(new ExceptionInfo)
   val br     = Input(new BrInfo)
+  val tvec   = Input(UInt(32.W))
 }
 
 class PipeDIVInput extends Bundle {
@@ -240,8 +241,6 @@ class PipeInfo extends Bundle {
   def isMem: Bool = isLd || isSt
 
   def rdIdx: UInt = info.inst(11, 7)
-
-  // def commit: Bool = valid
 }
 
 class ISCSRInput extends Bundle {
@@ -250,6 +249,7 @@ class ISCSRInput extends Bundle {
   val rdata  = Input(UInt(32.W))
   val wdata  = Input(UInt(32.W))
   val except = Input(new ExceptionInfo)
+  val tvec   = Input(UInt(32.W))
 }
 
 class ISEXUInput extends Bundle {
@@ -262,7 +262,6 @@ class ISCSROutput extends Bundle {
   val wen     = Output(Bool())
   val waddr   = Output(UInt(12.W))
   val wdata   = Output(UInt(32.W))
-  val invalid = Output(Bool())
   val except  = Output(new ExceptionInfo)
 }
 

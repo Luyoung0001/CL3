@@ -127,7 +127,7 @@ void difftest_init(const Vtop *p, const char *ref_so_file,
   dut.pc = RESET_VECTOR;
   dut.csr[3] = 0x1800;
   ref.pc = RESET_VECTOR;
-  // ref.csr[2] = TRAP_VECTOR;
+  ref.csr[3] = 0x1800;
 
   // Initialize remote REF state
   ref_difftest_regcpy((void *)&ref, DIFFTEST_TO_REF);

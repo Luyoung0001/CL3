@@ -21,8 +21,6 @@ class LSUIO extends Bundle {
   val out = new LSUOutput
 }
 
-//TODO: check the timing path: issue -> lsu
-//TODO: add exception support
 class CL3LSU extends Module with LSUConstant {
 
   val io = IO(new LSUIO)
@@ -38,95 +36,65 @@ class CL3LSU extends Module with LSUConstant {
 
   val is_load  = !op(LSU_LS_BIT)
   val is_store = op(LSU_LS_BIT)
-  dontTouch(is_store)
+  val addr     = io.in.info.rs1 + Mux(is_load, Iimm, Simm)
 
   val complete_err_w = io.in.mem.bits.err.orR && io.in.mem.valid
-  val complete_err_q = RegNext(complete_err_w)
 
-  val addr = io.in.info.rs1 + Mux(is_load, Iimm, Simm)
-  dontTouch(addr)
   val sizeSel = op(2, 1)
+
   val mask = MuxCase(MASK_Z, Seq(
     (sizeSel === LSU_1B.U(2.W)) -> UIntToOH(addr(1, 0), 4),
     (sizeSel === LSU_2B.U(2.W)) -> Mux(addr(1), MASK_HI, MASK_LO),
     (sizeSel === LSU_4B.U(2.W)) -> MASK_ALL
   ))
 
-  val outstanding_q = RegInit(0.U(2.W))
+  val outstanding_q = RegInit(false.B)
 
-  // when(io.out.mem.fire) {
-  //   outstanding_q := outstanding_q + 1.U
-  // }
-  when(io.in.mem.valid && io.out.mem.fire) {
-    outstanding_q := outstanding_q
-  } .elsewhen(io.in.mem.valid) {
-    outstanding_q := outstanding_q - 1.U
-  } .elsewhen(io.out.mem.fire) {
-    outstanding_q := outstanding_q + 1.U
+  when(io.out.mem.fire) {
+    outstanding_q := true.B
+  }.elsewhen(io.in.mem.valid) {
+    outstanding_q := false.B
   }
 
-  val pending = outstanding_q.orR && complete_err_w
+
+
+  val pending = outstanding_q && !io.in.mem.valid
 
   val req_q       = RegInit(0.U.asTypeOf(new CL3DCacheReq))
   val op_q        = RegInit(0.U(4.W))
   val req_valid_q = RegInit(false.B)
 
-  // when(io.in.flush) {
-  //   req_valid_q := false.B
-  // // }.elsewhen(io.in.info.valid && !(io.out.mem.valid && !io.out.mem.ready)) {
-  // }.elsewhen(io.in.info.valid && !(req_valid_q && !io.out.mem.fire)) { //TODO:
-  //   req_valid_q := true.B
-  // }
-
-  // excetion_detect
-  val mem_unaligned_r    = WireDefault(false.B)  
   val mem_unaligned_e1_q = RegInit(false.B)
   val mem_unaligned_e2_q = RegInit(false.B)
 
-  when(op(2, 1) === 3.U && io.in.info.valid) {
-    mem_unaligned_r := (addr(1, 0).orR)
-  } .elsewhen(op(2, 1) === 2.U && io.in.info.valid) {
-    mem_unaligned_r := addr(0).asBool
-  }
-
-  mem_unaligned_e2_q := mem_unaligned_e1_q & !pending
-
-  when(io.in.mem.valid){
-    mem_unaligned_e1_q := false.B
-  }
-  when(mem_unaligned_e2_q || complete_err_w || io.in.flush) {
+  when(io.in.flush) { //TODO:
     req_valid_q := false.B
-    req_q := 0.U.asTypeOf(new CL3DCacheReq)
-  // }.elsewhen(io.in.info.valid && !(io.out.mem.valid && !io.out.mem.ready)) {
-
-  } .elsewhen(io.in.info.valid && !(req_valid_q && !io.out.mem.fire)) {
-    mem_unaligned_e1_q := mem_unaligned_r
+    mem_unaligned_e1_q := false.B
+    mem_unaligned_e2_q := false.B
+  }.elsewhen(io.in.info.valid && !(req_valid_q && !io.out.mem.fire)) {
     req_valid_q        := true.B
     req_q.addr         := addr
     req_q.wdata        := io.in.info.rs2
     req_q.wen          := is_store
     req_q.mask         := mask
-    // req_q.cacheable := false.B // TODO:
-    req_q.cacheable := (addr(31, 28) === "h8".U(4.W))
-    req_q.pc           := io.in.info.pc
+    req_q.cacheable    := (addr(31, 28) === "h8".U(4.W)) //TODO:
+
+    mem_unaligned_e1_q := Mux1H(Seq(
+      (op(2, 1) === 3.U) -> addr(1),
+      (op(2, 1) === 2.U) -> addr(0)
+    ))
 
     op_q := op
 
-  }.elsewhen(io.out.mem.fire && !io.in.info.valid) {
+  }.elsewhen((io.out.mem.fire || mem_unaligned_e1_q) && !io.in.info.valid) {
     req_valid_q := false.B
   }
   
+  io.out.mem.valid      := req_valid_q && !mem_unaligned_e1_q && !pending && !io.in.flush
 
-  when(io.in.flush) {
-    mem_unaligned_e1_q := false.B
-    mem_unaligned_e2_q := false.B
-  }
-
-  io.out.mem.valid      := req_valid_q && !pending
-
-  io.out.mem.valid      := req_valid_q && !pending && !io.in.flush
   io.out.mem.bits       := req_q
   io.out.mem.bits.mask  := Mux(req_q.wen, req_q.mask, 0.U)
+
   val is_word_mask = req_q.mask === MASK_ALL
   val is_half_mask = (req_q.mask === MASK_HI) || (req_q.mask === MASK_LO)
   val is_byte_mask = req_q.mask.orR && !is_half_mask && !is_word_mask
@@ -139,15 +107,11 @@ class CL3LSU extends Module with LSUConstant {
   ))
   val half_data = Mux(req_q.mask === MASK_HI, Cat(req_q.wdata(15, 0), 0.U(16.W)), Cat(0.U(16.W), req_q.wdata(15, 0)))
 
-  val aligned_wdata = WireDefault(0.U(32.W))
-  when(is_word_mask) {
-    aligned_wdata := req_q.wdata
-  } .elsewhen(is_half_mask) {
-    aligned_wdata := half_data
-  } .elsewhen(is_byte_mask) {
-    aligned_wdata := byte_data
-  }
-  io.out.mem.bits.wdata := aligned_wdata
+  io.out.mem.bits.wdata := Mux1H(Seq(
+    is_word_mask -> req_q.wdata,
+    is_half_mask -> half_data,
+    is_byte_mask -> byte_data
+  ))
 
   class ReqRecord extends Bundle {
     val mask      = UInt(4.W)
@@ -163,7 +127,6 @@ class CL3LSU extends Module with LSUConstant {
     req_record_q.op        := op_q
     req_record_q.cacheable := req_q.cacheable
     req_record_q.addr      := req_q.addr
-    req_record_q.pc        := req_q.pc
   }
 
   val lb_data = Mux1H(
@@ -174,43 +137,38 @@ class CL3LSU extends Module with LSUConstant {
       req_record_q.mask(3) -> io.in.mem.bits.rdata(31, 24)
     )
   )
-
   val lh_data = Mux(req_record_q.mask(1, 0).andR, io.in.mem.bits.rdata(15, 0), io.in.mem.bits.rdata(31, 16))
-
   val lw_data = io.in.mem.bits.rdata
 
-  val wb_data = WireDefault(0.U(32.W))
-  when(mem_unaligned_e2_q) {
-    wb_data := req_record_q.addr
-  } .otherwise(
-    wb_data := MuxLookup(req_record_q.op(2, 0), io.in.mem.bits.rdata)(
+
+  mem_unaligned_e2_q := mem_unaligned_e1_q
+
+  val wb_data = MuxLookup(req_record_q.op(2, 0), io.in.mem.bits.rdata)(
       Seq(
         "b010".U -> SignExt(lb_data, 32),
         "b011".U -> ZeroExt(lb_data, 32),
         "b100".U -> SignExt(lh_data, 32),
         "b101".U -> ZeroExt(lh_data, 32)
-      )
-    )
-  )
-  io.out.info.rdata := wb_data
+      ))
+  io.out.info.rdata := Mux(mem_unaligned_e2_q, req_q.addr, wb_data)
 
 
-  io.out.info.valid  := (io.in.mem.valid && outstanding_q.orR) | mem_unaligned_e2_q | complete_err_q
+  io.out.info.valid  := (io.in.mem.valid && outstanding_q) | mem_unaligned_e2_q
 
   val fault_load_align_w  = mem_unaligned_e2_q && !op_q(LSU_LS_BIT)
   val fault_store_align_w = mem_unaligned_e2_q && op_q(LSU_LS_BIT)
-  val fault_load_bus_w    = (complete_err_w || complete_err_q) && !req_record_q.op(LSU_LS_BIT)
-  val fault_store_bus_w   = (complete_err_w || complete_err_q) && req_record_q.op(LSU_LS_BIT)
+  val fault_load_bus_w    = complete_err_w && !req_record_q.op(LSU_LS_BIT)
+  val fault_store_bus_w   = complete_err_w &&  req_record_q.op(LSU_LS_BIT)
 
   io.out.info.except.addr := req_record_q.addr
-  io.out.info.except.pc := req_record_q.pc // TODO:
+  io.out.info.except.pc   := req_record_q.pc // TODO:
   io.out.info.except.code := MuxCase(0.U, Seq(
-    ( fault_load_align_w) -> EXCEPTION_MISALIGNED_LOAD,
-    ( fault_store_align_w) -> EXCEPTION_MISALIGNED_STORE,
-    ( fault_load_bus_w) -> EXCEPTION_FAULT_LOAD,
-    ( fault_store_bus_w) -> EXCEPTION_FAULT_STORE
+    (fault_load_align_w)  -> EXCEPTION_MISALIGNED_LOAD,
+    (fault_store_align_w) -> EXCEPTION_MISALIGNED_STORE,
+    (fault_load_bus_w)    -> EXCEPTION_FAULT_LOAD,
+    (fault_store_bus_w)   -> EXCEPTION_FAULT_STORE
   ))
-  io.out.info.stall  := pending || io.out.mem.valid && !io.out.mem.ready || mem_unaligned_e1_q
+  io.out.info.stall  := pending || io.out.mem.valid && !io.out.mem.ready
   io.out.info.cacheable := req_record_q.cacheable
 
 }

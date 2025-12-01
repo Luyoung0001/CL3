@@ -124,7 +124,7 @@ class CL3CSR extends Module with CSRConstant {
 
     // Invalid instruction / CSR access fault?
     // Record opcode for writing to csr_xtval later.
-    when ( csr_fault_r || eret_fault_w || io.in.wb.invalid) {
+    when ( csr_fault_r || eret_fault_w) {
       rd_result_e1_q := io.in.info.inst
     } .otherwise {
       rd_result_e1_q := csr_rdata_w
@@ -154,8 +154,6 @@ class CL3CSR extends Module with CSRConstant {
     exception_e1_q := EXCEPTION_ERET_U + eret_priv_w
   }.elsewhen(ebreak_w) {
     exception_e1_q := EXCEPTION_BREAKPOINT
-  } .elsewhen( io.in.wb.invalid || csr_fault_r ) {
-    exception_e1_q := EXCEPTION_ILLEGAL_INSTRUCTION
   } .elsewhen( satp_update | ifence_w | sfence_w ) {
     exception_e1_q := EXCEPTION_FENCE
   } .otherwise {
@@ -172,6 +170,7 @@ class CL3CSR extends Module with CSRConstant {
 
 // Interrupt launch enable
   io.out.irq     := RegNext(interrupt_w.orR & !io.in.irq_inhibit)
+  io.out.info.tvec := csr_rf.io.tvec
 
 // ifence
   io.out.ifence  := RegNext(ifence_w)

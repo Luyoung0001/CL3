@@ -91,13 +91,15 @@ object OP1Field extends DecodeField[InstructionPattern, UInt] {
       case "bne"  => BitPat(OP1_BNE)
       case "bge"  => BitPat(OP1_BGE)
       case "bgeu" => BitPat(OP1_BGE)
-      case _      => BitPat.dontCare(OP1_WIDTH)
+      // case _      => BitPat.dontCare(OP1_WIDTH)
+      case _      => BitPat(OP1_REG)
     }
 
     val u = op.name match {
       case "lui"   => BitPat(OP1_Z)
       case "auipc" => BitPat(OP1_PC)
-      case _       => BitPat.dontCare(OP1_WIDTH)
+      // case _       => BitPat.dontCare(OP1_WIDTH)
+      case _       => BitPat(OP1_REG)
     }
 
     op.instType match {
@@ -107,9 +109,8 @@ object OP1Field extends DecodeField[InstructionPattern, UInt] {
       case "B" => b
       case "S" => BitPat(OP1_REG)
       case "R" => BitPat(OP1_REG)
-      case "M" => BitPat(OP1_REG)
-      case "CSR" => BitPat(OP1_REG)
-      case _   => BitPat.dontCare(OP1_WIDTH)
+      // case _   => BitPat.dontCare(OP1_WIDTH)
+      case _   => BitPat(OP1_REG)
     }
   }
 }
@@ -128,25 +129,17 @@ object OP2Field     extends DecodeField[InstructionPattern, UInt] {
       case "B" => BitPat(OP2_REG)
       case "S" => BitPat(OP2_REG)
       case "R" => BitPat(OP2_REG)
-      case _   => BitPat.dontCare(OP2_WIDTH)
+      // case _   => BitPat.dontCare(OP2_WIDTH)
+      case _   => BitPat(OP2_REG)
     }
   }
 }
 object IllegalField extends BoolDecodeField[InstructionPattern]   {
   def name: String = "illegal instruction"
 
-  def genTable(op: InstructionPattern): BitPat = {
-    op.instType match {
-      case "R"    => BitPat(false.B)
-      case "J"    => BitPat(false.B)
-      case "I"    => BitPat(false.B)
-      case "B"    => BitPat(false.B)
-      case "S"    => BitPat(false.B)
-      case "U"    => BitPat(false.B)
-      case "CSR"  => BitPat(false.B)
-      case _      => BitPat(true.B)
-    }
-  }
+  override def genTable(op: InstructionPattern): BitPat = BitPat(false.B)
+
+  override def default: BitPat = BitPat(true.B)
 }
 
 object WENField extends BoolDecodeField[InstructionPattern] {
@@ -228,14 +221,6 @@ object BRField extends BoolDecodeField[InstructionPattern] {
   }
 }
 
-object ValidField extends BoolDecodeField[InstructionPattern] {
-  def name: String = "Valid instruction flag"
-
-  def genTable(op: InstructionPattern): BitPat = {
-    BitPat(true.B)
-  }
-}
-
 class CL3Decoder extends Module {
 
   val io = IO(new Bundle {
@@ -251,22 +236,18 @@ class CL3Decoder extends Module {
 
   val decodeTable  = new DecodeTable(instPatterns, allFields)
   val decodeResult = decodeTable.decode(io.inst)
-  val hasMatch     = decodeResult(ValidField).asBool
 
   io.out.uop.op0 := decodeResult(OP0Field)
   io.out.uop.op1 := decodeResult(OP1Field)
   io.out.uop.op2 := decodeResult(OP2Field)
-  io.out.illegal := decodeResult(IllegalField) || !hasMatch
+  io.out.illegal := decodeResult(IllegalField)
   io.out.wen     := decodeResult(WENField)
+  io.out.isEXU   := decodeResult(EXUField)
   io.out.isLSU   := decodeResult(LSUField)
   io.out.isMUL   := decodeResult(MULField)
   io.out.isDIV   := decodeResult(DIVField)
-  io.out.isEXU   := decodeResult(EXUField)
+  io.out.isCSR   := decodeResult(CSRField)
   io.out.isBr    := decodeResult(BRField)
-
-  val isCSR_W     = decodeResult(CSRField)
-  io.out.isCSR := isCSR_W || io.out.illegal || io.fault_fetch
-
 
   io.out.inst := io.inst
 

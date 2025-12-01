@@ -89,7 +89,6 @@ class CL3Fetch() extends Module with CL3Config {
   io.mem.req.bits.addr       := icache_pc(31, 2) ## 0.U(2.W)
   io.mem.req.bits.flush      := false.B //TODO:
   io.mem.req.bits.invalidate := false.B
-  io.mem.req.bits.pc         := icache_pc // TODO:
     
   val skid_buffer_q = RegInit(0.U.asTypeOf(new FERawInfo))
   val skid_valid_q  = RegInit(false.B)

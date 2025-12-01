@@ -44,9 +44,7 @@ class CL3Core extends Module with CL3Config {
   // TODO
   csr.io.in.ext_irq     := false.B
   csr.io.in.timer_irq   := io.timer_irq
-  // csr.io.in.invalid     := false.B
   csr.io.in.irq_inhibit := false.B
-
   issue.io.in.irq := csr.io.out.irq
 
 

@@ -12,13 +12,7 @@ class DecodeFIFO extends Module with DecodeFIFOConfig {
     val flush = Input(Bool())
     val in    = Flipped(Decoupled(Vec(2, Input(new DEInfo))))
     val out   = Vec(2, Decoupled(Output(new DEInfo)))
-
-    val debug = new Bundle {
-      val next_ptr = Output(UInt(log2Ceil(FIFODepth).W))
-    }
   })
-
-  dontTouch(io.debug)
 
   class FIFOEntry extends Bundle {
     val info  = new DEInfo
@@ -35,9 +29,6 @@ class DecodeFIFO extends Module with DecodeFIFOConfig {
   val head = entrys(rd_ptr_q)
 
   val next_ptr = rd_ptr_q +% 1.U
-
-  io.debug.next_ptr := next_ptr
-
   io.out(0).valid := head.valid
   io.out(1).valid := entrys(next_ptr).valid
 
