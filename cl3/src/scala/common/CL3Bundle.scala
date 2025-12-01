@@ -42,12 +42,16 @@ class FERawInfo extends Bundle {
   val pc   = UInt(32.W)
   val inst = UInt(64.W)
   val pred = UInt(2.W)
+  val fault_fetch = Bool()
+  val fault_page  = Bool()
 }
 
 class FEInfo extends Bundle {
   val pc    = UInt(32.W)
   val inst  = UInt(32.W)
   val pred  = Bool()
+  val fault_fetch = Bool()
+  val fault_page  = Bool()
 }
 
 class MicroOp extends Bundle {
@@ -111,6 +115,8 @@ class DEInfo extends Bundle {
   val uop     = new MicroOp
   val illegal = Bool()
   val pred    = Bool()
+  val fault_fetch = Bool()
+  val fault_page  = Bool()
 
   def rdIdx:  UInt = inst(11, 7)
   def rs1Idx: UInt = Mux(uop.op1 === OP1_Z || uop.op1 === OP1_PC, 0.U(5.W), inst(19, 15)) // TODO:
@@ -126,6 +132,25 @@ class DEInfo extends Bundle {
         isEXU -> 0.U(2.W)
       )
     )
+  }
+}
+
+class ExceptionInfo extends Bundle {
+  val code = UInt(6.W)
+  val pc   = UInt(32.W)
+  val addr = UInt(32.W)
+
+  def valid: Bool = code.orR
+}
+
+object ExceptionInfo {
+  def none: ExceptionInfo = 0.U.asTypeOf(new ExceptionInfo)
+  def apply(code: UInt, pc: UInt, addr: UInt = 0.U): ExceptionInfo = {
+    val w = Wire(new ExceptionInfo)
+    w.code := code
+    w.pc   := pc
+    w.addr := addr
+    w
   }
 }
 
@@ -146,17 +171,17 @@ class PipeISInput extends Bundle {
   val rs2       = Input(UInt(32.W))
   val rs1_id    = Input(UInt(3.W))
   val rs2_id    = Input(UInt(3.W))
-  val except    = Input(UInt(6.W))
+  val except    = Input(new ExceptionInfo)
   val rdy_stage = Input(UInt(2.W))
 
   def rdIdx: UInt = info.inst(11, 7)
 }
 
 class PipeLSUInput extends Bundle {
-  val valid     = Input(Bool())
-  val rdata     = Input(UInt(32.W))
-  val except    = Input(UInt(6.W))
-  val stall     = Input(Bool())
+  val valid  = Input(Bool())
+  val rdata  = Input(UInt(32.W))
+  val except = Input(new ExceptionInfo)
+  val stall  = Input(Bool())
   val cacheable = Input(Bool())
 }
 
@@ -164,7 +189,9 @@ class PipeCSRInput extends Bundle {
   val wen    = Input(Bool())
   val rdata  = Input(UInt(32.W))
   val wdata  = Input(UInt(32.W))
-  val except = Input(UInt(6.W))
+  val except = Input(new ExceptionInfo)
+  val br     = Input(new BrInfo)
+  val tvec   = Input(UInt(32.W))
 }
 
 class PipeDIVInput extends Bundle {
@@ -191,7 +218,9 @@ class PipeInfo extends Bundle {
   val rs2_id    = UInt(3.W)
   val result    = UInt(32.W)
   val rdy_stage = UInt(2.W)
-  val except    = UInt(6.W)
+  val except    = new ExceptionInfo
+  val commit    = Bool()
+  val stall     = Bool()
 
   val csr = new Bundle {
     val waddr = UInt(12.W)
@@ -212,8 +241,6 @@ class PipeInfo extends Bundle {
   def isMem: Bool = isLd || isSt
 
   def rdIdx: UInt = info.inst(11, 7)
-
-  def commit: Bool = valid
 }
 
 class ISCSRInput extends Bundle {
@@ -221,7 +248,8 @@ class ISCSRInput extends Bundle {
   val wen    = Input(Bool())
   val rdata  = Input(UInt(32.W))
   val wdata  = Input(UInt(32.W))
-  val except = Input(UInt(6.W))
+  val except = Input(new ExceptionInfo)
+  val tvec   = Input(UInt(32.W))
 }
 
 class ISEXUInput extends Bundle {
@@ -231,10 +259,10 @@ class ISEXUInput extends Bundle {
 }
 
 class ISCSROutput extends Bundle {
-  val wen    = Output(Bool())
-  val waddr  = Output(UInt(12.W))
-  val wdata  = Output(UInt(32.W))
-  val except = Output(UInt(6.W))
+  val wen     = Output(Bool())
+  val waddr   = Output(UInt(12.W))
+  val wdata   = Output(UInt(32.W))
+  val except  = Output(new ExceptionInfo)
 }
 
 class BypassISInfo extends Bundle {
