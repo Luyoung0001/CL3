@@ -18,8 +18,11 @@ export IMAGE
 SRCS += $(wildcard $(COMMON_DIR)/*.c) \
         $(wildcard $(COMMON_DIR)/*.S) \
 		$(wildcard $(COMMON_DIR)/libgcc/*.S) \
-		$(wildcard $(COMMON_DIR)/libgcc/*.c)
-INC_PATH += $(COMMON_DIR)/include
+		$(wildcard $(COMMON_DIR)/libgcc/*.c) \
+		$(wildcard $(COMMON_DIR)/soft-fp/*.c)
+
+INC_PATH += $(COMMON_DIR)/include \
+		$(wildcard $(COMMON_DIR)/*.h)
 
 OBJS      = $(addprefix $(DST_DIR)/, $(addsuffix .o, $(basename $(SRCS))))
 
@@ -100,10 +103,8 @@ image-dep: $(OBJS)
 
 clean:
 	rm -rf $(WORK_DIR)/build/
-.PHONY: clean
 
 run: image
-	$(MAKE) -C $(PRJ_HOME) run 
+	$(PRJ_HOME)/build/verilator/top --diff +fst +firmware=$(IMAGE).hex -i $(IMAGE).bin -r $(PRJ_HOME)/utils/riscv32-spike-so
 
-gdb: image
-	$(MAKE) -C $(PRJ_HOME) gdb
+.PHONY: clean run
