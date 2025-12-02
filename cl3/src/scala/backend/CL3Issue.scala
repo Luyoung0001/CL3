@@ -285,15 +285,15 @@ class CL3Issue extends Module with CL3Config {
   io.out.op(2) := Mux(e1_lsu_op.valid, e1_lsu_op, issue_lsu_op)
 
   // MUL
-  val issue_slot0_mul = slot(0).bits.isMUL && slot0_fire && pipes(0).io.in.issue.rdy_stage(0)
-  val issue_slot1_mul = slot(1).bits.isMUL && slot1_fire && pipes(1).io.in.issue.rdy_stage(0)
+  val issue_slot0_mul = slot(0).bits.isMUL && slot0_fire && pipes(0).io.in.issue.rdy_stage(0) && !pipes(0).io.in.issue.except.valid
+  val issue_slot1_mul = slot(1).bits.isMUL && slot1_fire && pipes(1).io.in.issue.rdy_stage(0) && !pipes(1).io.in.issue.except.valid
 
   val issue_mul_op    = Wire(new OpInfo)
   issue_mul_op       := Mux(issue_slot0_mul, slot_op(0), slot_op(1))
   issue_mul_op.valid := (issue_slot0_mul || issue_slot1_mul) && ~io.in.irq
 
-  val e1_slot0_mul = pipe_e1(0).isMul && pipe_e1(0).rdy_stage(1) && pipe_e1(0).commit
-  val e1_slot1_mul = pipe_e1(1).isMul && pipe_e1(1).rdy_stage(1) && pipe_e1(1).commit
+  val e1_slot0_mul = pipe_e1(0).isMul && pipe_e1(0).rdy_stage(1) && pipe_e1(0).commit && !pipe_e1(0).except.valid
+  val e1_slot1_mul = pipe_e1(1).isMul && pipe_e1(1).rdy_stage(1) && pipe_e1(1).commit && !pipe_e1(1).except.valid && !slot1_mismatch
 
   val e1_mul_op = Wire(new OpInfo)
   e1_mul_op       := Mux(e1_slot1_mul, OpInfo.fromPipe(pipe_e1(1)), OpInfo.fromPipe(pipe_e1(0)))
@@ -303,7 +303,7 @@ class CL3Issue extends Module with CL3Config {
 
   // DIV
   io.out.op(4)       := slot_op(0)
-  io.out.op(4).valid := pipes(0).io.in.issue.fire && slot(0).bits.isDIV
+  io.out.op(4).valid := pipes(0).io.in.issue.fire && slot(0).bits.isDIV && !pipes(0).io.in.issue.except.valid
 
   val div_pending_q = RegInit(false.B)
   when(pipes(0).io.in.flush || pipes(1).io.in.flush) {
@@ -327,8 +327,7 @@ class CL3Issue extends Module with CL3Config {
   csr_pending := csr_pending_q
 
   io.out.op(5)       := slot_op(0)
-  // io.out.op(5).valid := slot_op(0).valid && ~io.in.irq && slot(0).bits.isCSR
-  io.out.op(5).valid := pipes(0).io.in.issue.fire && ~io.in.irq && slot(0).bits.isCSR
+  io.out.op(5).valid := pipes(0).io.in.issue.fire && ~io.in.irq && slot(0).bits.isCSR && !pipes(0).io.in.issue.except.valid
 
 
   dual_issue   := pipes(1).io.in.issue.fire && !io.in.irq

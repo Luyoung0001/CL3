@@ -201,7 +201,7 @@ int difftest_step(int n, svOpenArrayHandle info) {
                          "but REF's NPC is %0#x. "
                          "Maybe there is an wrong branch/jump/CSR Instruction"
                          "or trap.\n" COLOR_END,
-               diff_info_ptr[i].pc, ref.pc);
+               diff_info_ptr[i].pc, npc, ref.pc);
 
         return 1;
       }
