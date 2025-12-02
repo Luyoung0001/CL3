@@ -65,7 +65,7 @@ class CL3LSU extends Module with LSUConstant {
   val req_valid_q = RegInit(false.B)
 
   val mem_unaligned_e1_q = RegInit(false.B)
-  val mem_unaligned_e2_q = RegInit(false.B)
+  val mem_unaligned_e2_q = RegEnable(mem_unaligned_e1_q, false.B, !pending)
 
   when(io.in.flush) { //TODO:
     req_valid_q := false.B
@@ -139,9 +139,6 @@ class CL3LSU extends Module with LSUConstant {
   )
   val lh_data = Mux(req_record_q.mask(1, 0).andR, io.in.mem.bits.rdata(15, 0), io.in.mem.bits.rdata(31, 16))
   val lw_data = io.in.mem.bits.rdata
-
-
-  mem_unaligned_e2_q := mem_unaligned_e1_q
 
   val wb_data = MuxLookup(req_record_q.op(2, 0), io.in.mem.bits.rdata)(
       Seq(
