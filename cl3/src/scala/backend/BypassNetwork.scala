@@ -95,25 +95,54 @@ class BypassNetwork extends Module with PipeConstant {
 
 }
 
+// object BypassNetwork {
+
+//   type BypassSource = (Bool, UInt, UInt, UInt, UInt)
+
+//   def apply(rsIdx: UInt, defaultValue: BypassResult, sources: Seq[BypassSource]): BypassResult = {
+//     val cases = sources.map { case (condition, rdIdx, data, srcid, rdyIdx) =>
+//       val bypass_hit = condition && (rdIdx =/= 0.U) && (rdIdx === rsIdx)
+
+//       val result = Wire(new BypassResult)
+//       result.data := data
+//       result.id   := srcid
+
+//       val currentStageIdx = srcid(2, 1)
+//       result.delay := Mux(rdyIdx >= currentStageIdx, rdyIdx - currentStageIdx, 0.U) // TODO:
+
+//       (bypass_hit, result)
+//     }
+
+//     val defaultCase = (true.B, defaultValue)
+//     PriorityMux(cases :+ defaultCase)
+//   }
+// }
 object BypassNetwork {
 
   type BypassSource = (Bool, UInt, UInt, UInt, UInt)
 
   def apply(rsIdx: UInt, defaultValue: BypassResult, sources: Seq[BypassSource]): BypassResult = {
-    val cases = sources.map { case (condition, rdIdx, data, srcid, rdyIdx) =>
-      val bypass_hit = condition && (rdIdx =/= 0.U) && (rdIdx === rsIdx)
 
-      val result = Wire(new BypassResult)
-      result.data := data
-      result.id   := srcid
-
-      val currentStageIdx = srcid(2, 1)
-      result.delay := Mux(rdyIdx >= currentStageIdx, rdyIdx - currentStageIdx, 0.U) // TODO:
-
-      (bypass_hit, result)
+    val hits = sources.map { case (condition, rdIdx, _, _, _) =>
+      condition && (rdIdx =/= 0.U) && (rdIdx === rsIdx)
     }
 
-    val defaultCase = (true.B, defaultValue)
-    PriorityMux(cases :+ defaultCase)
+    val dataCandidates = sources.map { case (_, _, data, srcid, rdyIdx) =>
+      val res = Wire(new BypassResult)
+      res.data := data
+      res.id   := srcid
+      
+      val currentStageIdx = srcid(2, 1) 
+      res.delay := Mux(rdyIdx >= currentStageIdx, rdyIdx - currentStageIdx, 0.U)
+      res
+    }
+
+    val selOH = PriorityEncoderOH(hits)
+
+    val anyHit = hits.reduce(_ || _)
+
+    val bypassData = Mux1H(selOH, dataCandidates)
+
+    Mux(anyHit, bypassData, defaultValue)
   }
 }
