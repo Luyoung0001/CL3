@@ -158,6 +158,9 @@ void update_dut_csr(int wen, uint16_t waddr, uint32_t wdata) {
       case MSTATUS:
         dut.csr[3] = wdata;
         break;
+      case MTVAL:
+        dut.csr[4] = wdata;
+        break;
       default:
         printf("CSR write addr error: %x\n", waddr);
         break;
@@ -175,12 +178,6 @@ int difftest_step(int n, svOpenArrayHandle info) {
   uint32_t npc;
   for (i = 0; i < n; i++) {
     if (diff_info_ptr[i].commit) {
-
-      // printf("CSR write: wen=%d, waddr=%x, wdata=%x\n", diff_info_ptr[i].csr_wen, diff_info_ptr[i].csr_waddr, diff_info_ptr[i].csr_wdata);
-      // printf("skip=%d\n", diff_info_ptr[i].skip);
-      // printf("PC check: DUT pc=%x, REF pc=%x, NPC=%x\n", diff_info_ptr[i].pc, ref.pc, diff_info_ptr[i].npc);
-      // printf("inst=%x\n", diff_info_ptr[i].inst);
-      // printf("rdIdx=%d, wen=%d, wdata=%x\n", diff_info_ptr[i].rdIdx, diff_info_ptr[i].wen, diff_info_ptr[i].wdata);
 
       update_dut_csr(diff_info_ptr[i].csr_wen, diff_info_ptr[i].csr_waddr, diff_info_ptr[i].csr_wdata);
       
@@ -232,22 +229,24 @@ int difftest_step(int n, svOpenArrayHandle info) {
     }
   }
 
-  for (int i = 0; i < 4; i++) {
+  int csr_mask = 0;
+  for (int i = 0; i < 5; i++) {
     if (dut.csr[i] != ref.csr[i]) {
       printf(COLOR_RED
              "[DIFFTEST] CSR[%d]: DUT is %0#x, REF is %0#x\n" COLOR_END,
              i, dut.csr[i], ref.csr[i]);
-      gpr_mask |= (1U << (i + GPR_NUM));
+      csr_mask |= (1U << (i + CSR_NUM));
     }
   }
 
-  if (gpr_mask) {
+  if (gpr_mask | csr_mask) {
     printf(COLOR_RED
            "[DIFFTEST] Mismatch in double check: "
            "Maybe something changed the DUT state unexpectedly.\n" COLOR_END);
 
     return 1;
   }
+  
   return 0;
 }
 

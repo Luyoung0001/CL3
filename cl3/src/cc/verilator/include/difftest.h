@@ -130,18 +130,21 @@
 #define MTVEC   0x305
 #define MCAUSE  0x342
 #define MSTATUS 0x300
+#define MTVAL   0x343
 
 // EXCEPTION Registers
 #define MEPC_R    (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mepc_q)
 #define MTVEC_R   (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mtvec_q)
 #define MCAUSE_R  (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mcause_q)
 #define MSTATUS_R (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_sr_q)
+#define MTVAL_R   (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mtval_q)
 
 #define GET_ALL_CSR do { \
   dut.csr[0] = MEPC_R; \
   dut.csr[1] = MCAUSE_R; \
   dut.csr[2] = MTVEC_R; \
   dut.csr[3] = MSTATUS_R; \
+  dut.csr[4] = MTVAL_R; \
 } while(0);
 
 enum { DIFFTEST_TO_DUT, DIFFTEST_TO_REF };

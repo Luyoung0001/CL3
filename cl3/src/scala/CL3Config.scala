@@ -4,12 +4,12 @@ import chisel3._
 import chisel3.util._
 
 trait CL3Config {
-  val ADDR_WIDTH    = 32
-  val DATA_WIDTH    = 64
+  val ADDR_WIDTH   = 32
+  val DATA_WIDTH   = 64
   val EnableMMU    = false
   val EnableBP     = true
   val EnableDiff   = true
-  val EnablePerf   = true
+  val EnablePerf   = false
   // val SimMemOption = "DPI-C"
   val SimMemOption = "SoC"
   val BOOT_ADDR    = "h80000000".U

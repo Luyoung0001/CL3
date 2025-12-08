@@ -67,7 +67,7 @@ class CL3EXU extends Module with OpConstant {
   )
 
   val br_target  = io.in.info.pc + Bimm
-  val jmp_target = alu.io.res(31, 1) ## 0.U(1.W) //TODO: unaligned exception
+  val jmp_target = alu.io.res(31, 1) ## 0.U(1.W) // TODO: unaligned exception
 
   io.out.info.br.valid := io.in.info.valid && taken
   io.out.info.br.pc    := Mux(isJal || isJalr, jmp_target, br_target)

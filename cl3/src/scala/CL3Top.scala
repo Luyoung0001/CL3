@@ -20,10 +20,10 @@ class CL3Top extends Module with CL3Config {
 
   if (SimMemOption == "SoC") {
     val icache = Module(new ICache(ip))
-    icache.io.cpu.req_rd            := core.io.imem.req.valid
-    core.io.imem.req.ready          := icache.io.cpu.resp_accept
-    icache.io.cpu.req_pc            := core.io.imem.req.bits.addr
-    icache.io.cpu.req_flush := core.io.imem.req.bits.flush
+    icache.io.cpu.req_rd         := core.io.imem.req.valid
+    core.io.imem.req.ready       := icache.io.cpu.resp_accept
+    icache.io.cpu.req_pc         := core.io.imem.req.bits.addr
+    icache.io.cpu.req_flush      := core.io.imem.req.bits.flush
     icache.io.cpu.req_invalidate := core.io.imem.req.bits.invalidate
 
     core.io.imem.resp.valid      := icache.io.cpu.resp_valid
@@ -31,17 +31,17 @@ class CL3Top extends Module with CL3Config {
     core.io.imem.resp.bits.rdata := icache.io.cpu.resp_inst
 
     val dcache = Module(new DCache(dp))
-    dcache.io.cpu.req.rd             := core.io.dmem.req.valid
-    core.io.dmem.req.ready           := dcache.io.cpu.accept
-    dcache.io.cpu.req.addr           := core.io.dmem.req.bits.addr
-    dcache.io.cpu.req.cacheable      := core.io.dmem.req.bits.cacheable
-    dcache.io.cpu.req.wr             := core.io.dmem.req.bits.mask
-    dcache.io.cpu.req.dataWr    := core.io.dmem.req.bits.wdata
+    dcache.io.cpu.req.rd         := core.io.dmem.req.valid
+    core.io.dmem.req.ready       := dcache.io.cpu.accept
+    dcache.io.cpu.req.addr       := core.io.dmem.req.bits.addr
+    dcache.io.cpu.req.cacheable  := core.io.dmem.req.bits.cacheable
+    dcache.io.cpu.req.wr         := core.io.dmem.req.bits.mask
+    dcache.io.cpu.req.dataWr     := core.io.dmem.req.bits.wdata
     dcache.io.cpu.req.invalidate := false.B
     dcache.io.cpu.req.writeback  := false.B
     dcache.io.cpu.req.flush      := false.B
-    dcache.io.amo := DontCare
-    dcache.io.cpu.req.reqTag := DontCare
+    dcache.io.amo                := DontCare
+    dcache.io.cpu.req.reqTag     := DontCare
     // dcache.io.cpu.resp.ready := true.B
 
     core.io.dmem.resp.valid      := dcache.io.cpu.resp.ack
@@ -55,43 +55,43 @@ class CL3Top extends Module with CL3Config {
     val clint = Module(new CL3CLINT)
     val xbar  = Module(new CL3Xbar)
     core.io.timer_irq := clint.io.irq
-    
+
     clint.io.axi <> xbar.io.clint
-    io.master    <> xbar.io.top
+    io.master <> xbar.io.top
 
     // Arbiter -> Xbar (Simple AXI master signals)
-    xbar.io.xbar.aw.valid            := u_arbiter.io.mem_axi.aw.valid
-    xbar.io.xbar.aw.bits.awaddr      := u_arbiter.io.mem_axi.aw.bits.addr
-    xbar.io.xbar.aw.bits.awid        := u_arbiter.io.mem_axi.aw.bits.id
-    xbar.io.xbar.aw.bits.awlen       := u_arbiter.io.mem_axi.aw.bits.len
-    xbar.io.xbar.aw.bits.awsize      := u_arbiter.io.mem_axi.aw.bits.size
-    xbar.io.xbar.aw.bits.awburst     := u_arbiter.io.mem_axi.aw.bits.burst
-    xbar.io.xbar.aw.bits.awlock      := u_arbiter.io.mem_axi.aw.bits.lock
-    xbar.io.xbar.aw.bits.awcache     := u_arbiter.io.mem_axi.aw.bits.cache
-    xbar.io.xbar.aw.bits.awprot      := u_arbiter.io.mem_axi.aw.bits.prot
-    u_arbiter.io.mem_axi.aw.ready    := xbar.io.xbar.aw.ready
+    xbar.io.xbar.aw.valid         := u_arbiter.io.mem_axi.aw.valid
+    xbar.io.xbar.aw.bits.awaddr   := u_arbiter.io.mem_axi.aw.bits.addr
+    xbar.io.xbar.aw.bits.awid     := u_arbiter.io.mem_axi.aw.bits.id
+    xbar.io.xbar.aw.bits.awlen    := u_arbiter.io.mem_axi.aw.bits.len
+    xbar.io.xbar.aw.bits.awsize   := u_arbiter.io.mem_axi.aw.bits.size
+    xbar.io.xbar.aw.bits.awburst  := u_arbiter.io.mem_axi.aw.bits.burst
+    xbar.io.xbar.aw.bits.awlock   := u_arbiter.io.mem_axi.aw.bits.lock
+    xbar.io.xbar.aw.bits.awcache  := u_arbiter.io.mem_axi.aw.bits.cache
+    xbar.io.xbar.aw.bits.awprot   := u_arbiter.io.mem_axi.aw.bits.prot
+    u_arbiter.io.mem_axi.aw.ready := xbar.io.xbar.aw.ready
 
-    xbar.io.xbar.w.valid             := u_arbiter.io.mem_axi.w.valid
-    xbar.io.xbar.w.bits.wdata        := u_arbiter.io.mem_axi.w.bits.data
-    xbar.io.xbar.w.bits.wstrb        := u_arbiter.io.mem_axi.w.bits.strb
-    xbar.io.xbar.w.bits.wlast        := u_arbiter.io.mem_axi.w.bits.last
-    u_arbiter.io.mem_axi.w.ready     := xbar.io.xbar.w.ready
+    xbar.io.xbar.w.valid         := u_arbiter.io.mem_axi.w.valid
+    xbar.io.xbar.w.bits.wdata    := u_arbiter.io.mem_axi.w.bits.data
+    xbar.io.xbar.w.bits.wstrb    := u_arbiter.io.mem_axi.w.bits.strb
+    xbar.io.xbar.w.bits.wlast    := u_arbiter.io.mem_axi.w.bits.last
+    u_arbiter.io.mem_axi.w.ready := xbar.io.xbar.w.ready
 
     u_arbiter.io.mem_axi.b.valid     := xbar.io.xbar.b.valid
     u_arbiter.io.mem_axi.b.bits.resp := xbar.io.xbar.b.bits.bresp
     u_arbiter.io.mem_axi.b.bits.id   := xbar.io.xbar.b.bits.bid
     xbar.io.xbar.b.ready             := u_arbiter.io.mem_axi.b.ready
 
-    xbar.io.xbar.ar.valid            := u_arbiter.io.mem_axi.ar.valid
-    xbar.io.xbar.ar.bits.araddr      := u_arbiter.io.mem_axi.ar.bits.addr
-    xbar.io.xbar.ar.bits.arid        := u_arbiter.io.mem_axi.ar.bits.id
-    xbar.io.xbar.ar.bits.arlen       := u_arbiter.io.mem_axi.ar.bits.len
-    xbar.io.xbar.ar.bits.arsize      := u_arbiter.io.mem_axi.ar.bits.size
-    xbar.io.xbar.ar.bits.arburst     := u_arbiter.io.mem_axi.ar.bits.burst
-    xbar.io.xbar.ar.bits.arlock      := u_arbiter.io.mem_axi.ar.bits.lock
-    xbar.io.xbar.ar.bits.arcache     := u_arbiter.io.mem_axi.ar.bits.cache
-    xbar.io.xbar.ar.bits.arprot      := u_arbiter.io.mem_axi.ar.bits.prot
-    u_arbiter.io.mem_axi.ar.ready    := xbar.io.xbar.ar.ready
+    xbar.io.xbar.ar.valid         := u_arbiter.io.mem_axi.ar.valid
+    xbar.io.xbar.ar.bits.araddr   := u_arbiter.io.mem_axi.ar.bits.addr
+    xbar.io.xbar.ar.bits.arid     := u_arbiter.io.mem_axi.ar.bits.id
+    xbar.io.xbar.ar.bits.arlen    := u_arbiter.io.mem_axi.ar.bits.len
+    xbar.io.xbar.ar.bits.arsize   := u_arbiter.io.mem_axi.ar.bits.size
+    xbar.io.xbar.ar.bits.arburst  := u_arbiter.io.mem_axi.ar.bits.burst
+    xbar.io.xbar.ar.bits.arlock   := u_arbiter.io.mem_axi.ar.bits.lock
+    xbar.io.xbar.ar.bits.arcache  := u_arbiter.io.mem_axi.ar.bits.cache
+    xbar.io.xbar.ar.bits.arprot   := u_arbiter.io.mem_axi.ar.bits.prot
+    u_arbiter.io.mem_axi.ar.ready := xbar.io.xbar.ar.ready
 
     u_arbiter.io.mem_axi.r.valid     := xbar.io.xbar.r.valid
     u_arbiter.io.mem_axi.r.bits.data := xbar.io.xbar.r.bits.rdata

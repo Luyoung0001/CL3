@@ -30,8 +30,8 @@ class CL3MUL extends Module {
 
   val en = io.in.info.valid && !io.in.hold
 
-  val ra_q       = RegEnable(io.in.info.rs1, en)
-  val rb_q       = RegEnable(io.in.info.rs2, en)
+  val ra_q = RegEnable(io.in.info.rs1, en)
+  val rb_q = RegEnable(io.in.info.rs2, en)
 
   val isCl_e1_q  = RegEnable(isCarryless, en)
   val isCl_e2_q  = RegNext(isCl_e1_q)
@@ -49,18 +49,18 @@ class CL3MUL extends Module {
 
   val multiplier = Module(new BoothMultiplier(32))
 
-  multiplier.io.valid := true.B //TODO:
-  multiplier.io.ra := LookupTree(func3_e1_q, mulInputFuncTable.map(p => (p._1, p._2._1(ra_q))))
-  multiplier.io.rb := LookupTree(func3_e1_q, mulInputFuncTable.map(p => (p._1, p._2._2(rb_q))))
+  multiplier.io.valid := true.B // TODO:
+  multiplier.io.ra    := LookupTree(func3_e1_q, mulInputFuncTable.map(p => (p._1, p._2._1(ra_q))))
+  multiplier.io.rb    := LookupTree(func3_e1_q, mulInputFuncTable.map(p => (p._1, p._2._2(rb_q))))
 
   val clmultiplier = Module(new CarrylessMultiplier)
-  clmultiplier.io.valid := true.B //TODO:
-  clmultiplier.io.op :=  func3_e1_q(1, 0)
-  clmultiplier.io.opa := ra_q
-  clmultiplier.io.opb := rb_q
+  clmultiplier.io.valid := true.B // TODO:
+  clmultiplier.io.op    := func3_e1_q(1, 0)
+  clmultiplier.io.opa   := ra_q
+  clmultiplier.io.opb   := rb_q
 
-  val mul_res = Mux(func3_e2_q.orR, multiplier.io.res(63, 32), multiplier.io.res(31, 0))
-  val clmul_res = clmultiplier.io.res 
+  val mul_res   = Mux(func3_e2_q.orR, multiplier.io.res(63, 32), multiplier.io.res(31, 0))
+  val clmul_res = clmultiplier.io.res
 
   io.out.result := Mux(isCl_e2_q, clmul_res, mul_res)
 }
@@ -251,7 +251,6 @@ class CarrylessMultiplier extends Module {
     val res   = Output(UInt(32.W))
   })
 
-
   val clmul  = io.op === 1.U
   val clmulr = io.op === 2.U
   val clmulh = io.op === 3.U
@@ -261,7 +260,7 @@ class CarrylessMultiplier extends Module {
 
   val clmul_and_stage = Wire(Vec(32, UInt(32.W)))
 
-  for( i <- 0 until 32 ) {
+  for (i <- 0 until 32) {
     clmul_and_stage(i) := Mux(opb_true(i), opa_true << i, 0.U(32.W))
   }
 
@@ -269,11 +268,7 @@ class CarrylessMultiplier extends Module {
 
   val res_rev = Reverse(res_raw)
 
-  val res = MuxCase(res_raw, 
-    Seq(clmul -> res_raw,
-        clmulh -> (res_rev >> 1),
-        clmulr -> res_rev)
-  )
+  val res = MuxCase(res_raw, Seq(clmul -> res_raw, clmulh -> (res_rev >> 1), clmulr -> res_rev))
 
   val res_q = RegEnable(res, io.valid)
 
