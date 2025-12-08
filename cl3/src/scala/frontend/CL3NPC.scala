@@ -5,7 +5,7 @@ import chisel3.util._
 
 trait NPCConfig {
   val numBTBEntries:       Int = 32
-  val numGlobalPHTEntries: Int = 1024
+  val numGlobalPHTEntries: Int = 256
   val numRasEntries:       Int = 6
   val numGlobalPHTWidth:   Int = log2Ceil(numGlobalPHTEntries)
   val numRasEntriesWidth:  Int = log2Ceil(numRasEntries)
@@ -22,14 +22,14 @@ class CL3NPC() extends Module with NPCConfig with CL3Config {
   if (EnableBP) {
 
     val btb_entry = Wire(Vec(2, new BTBEntry))
-    val btb = Module(new CL3BTB(numBTBEntries))
+    val btb       = Module(new CL3BTB(numBTBEntries))
 
     btb.io.rd(0).pc := pc0(31, 2)
     btb.io.rd(1).pc := pc1(31, 2)
 
     btb.io.wr.wen := io.bp.valid && io.mispred && io.bp.isTaken
 
-    btb.io.wr.pc := io.bp.source(31, 2)
+    btb.io.wr.pc           := io.bp.source(31, 2)
     btb.io.wr.wdata.target := io.bp.target
     btb.io.wr.wdata.isCall := io.bp.isCall
     btb.io.wr.wdata.isJmp  := io.bp.isJmp
@@ -88,7 +88,7 @@ class CL3NPC() extends Module with NPCConfig with CL3Config {
     }
 
     // Global history Register (speculative)
-    val ghr_q = RegInit(0.U(numGlobalPHTWidth.W))
+    val ghr_q      = RegInit(0.U(numGlobalPHTWidth.W))
     val pred_taken = Wire(Bool())
 
     when(io.mispred && !io.bp.isJmp && io.bp.valid) {
@@ -103,7 +103,7 @@ class CL3NPC() extends Module with NPCConfig with CL3Config {
 
     pht_rd_idx(0) := pc0(1 + numGlobalPHTWidth, 2)
     pht_rd_idx(1) := pc1(1 + numGlobalPHTWidth, 2)
-    
+
     val pht_wr_idx = io.bp.source(1 + numGlobalPHTWidth, 2)
 
     val pht_q = RegInit(VecInit(Seq.fill(numGlobalPHTEntries)(2.U(2.W))))
@@ -120,9 +120,9 @@ class CL3NPC() extends Module with NPCConfig with CL3Config {
     pht_is_taken(1) := pht_rd_data(1) >= 2.U
 
     when(io.bp.valid && io.bp.isTaken && pht_data =/= 3.U) {
-        pht_q(pht_wr_idx) := pht_data + 1.U
+      pht_q(pht_wr_idx) := pht_data + 1.U
     }.elsewhen(io.bp.valid && io.bp.isNotTaken && pht_data =/= 0.U) {
-        pht_q(pht_wr_idx) := pht_data - 1.U
+      pht_q(pht_wr_idx) := pht_data - 1.U
     }
 
     val bp_trigger0 = btb.io.rd(0).hit && (pc0_is_ret || pht_is_taken(0) || btb_entry(0).isJmp)

@@ -58,7 +58,7 @@ static void test_instr_misaligned(void) {
     uintptr_t base = (uintptr_t)&&here_instr;
     here_instr: ;
 
-    uintptr_t bad = base | 0x1;
+    uintptr_t bad = base | 0x3;
 
     asm volatile (
         "mv a0, %0 \n"
@@ -178,14 +178,14 @@ int main(void){
     csr_write_mtvec(trap_entry);
 
     // 逐个触发
-    // test_instr_misaligned();
+    test_instr_misaligned();
     test_instr_access_fault();
     test_illegal();
     test_ebreak();
-    test_load_access_fault();
     test_load_misaligned();
     test_store_misaligned();
-    test_store_access_fault();
+    // test_load_access_fault();
+    // test_store_access_fault();
 
     return 0;
 }

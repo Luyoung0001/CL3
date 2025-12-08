@@ -131,8 +131,8 @@ object BypassNetwork {
       val res = Wire(new BypassResult)
       res.data := data
       res.id   := srcid
-      
-      val currentStageIdx = srcid(2, 1) 
+
+      val currentStageIdx = srcid(2, 1)
       res.delay := Mux(rdyIdx >= currentStageIdx, rdyIdx - currentStageIdx, 0.U)
       res
     }

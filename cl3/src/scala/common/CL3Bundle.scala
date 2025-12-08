@@ -39,17 +39,17 @@ class NPCFullIO extends Bundle {
 }
 
 class FERawInfo extends Bundle {
-  val pc   = UInt(32.W)
-  val inst = UInt(64.W)
-  val pred = UInt(2.W)
+  val pc          = UInt(32.W)
+  val inst        = UInt(64.W)
+  val pred        = UInt(2.W)
   val fault_fetch = Bool()
   val fault_page  = Bool()
 }
 
 class FEInfo extends Bundle {
-  val pc    = UInt(32.W)
-  val inst  = UInt(32.W)
-  val pred  = Bool()
+  val pc          = UInt(32.W)
+  val inst        = UInt(32.W)
+  val pred        = Bool()
   val fault_fetch = Bool()
   val fault_page  = Bool()
 }
@@ -103,18 +103,18 @@ object OpInfo {
 }
 
 class DEInfo extends Bundle {
-  val inst    = UInt(32.W)
-  val pc      = UInt(32.W)
-  val wen     = Bool()
-  val isLSU   = Bool()
-  val isMUL   = Bool()
-  val isDIV   = Bool()
-  val isCSR   = Bool()
-  val isEXU   = Bool()
-  val isBr    = Bool()
-  val uop     = new MicroOp
-  val illegal = Bool()
-  val pred    = Bool()
+  val inst        = UInt(32.W)
+  val pc          = UInt(32.W)
+  val wen         = Bool()
+  val isLSU       = Bool()
+  val isMUL       = Bool()
+  val isDIV       = Bool()
+  val isCSR       = Bool()
+  val isEXU       = Bool()
+  val isBr        = Bool()
+  val uop         = new MicroOp
+  val illegal     = Bool()
+  val pred        = Bool()
   val fault_fetch = Bool()
   val fault_page  = Bool()
 
@@ -138,18 +138,18 @@ class DEInfo extends Bundle {
 class ExceptionInfo extends Bundle {
   val code = UInt(6.W)
   val pc   = UInt(32.W)
-  val addr = UInt(32.W)
+  val tval = UInt(32.W)
 
   def valid: Bool = code.orR
 }
 
 object ExceptionInfo {
-  def none: ExceptionInfo = 0.U.asTypeOf(new ExceptionInfo)
-  def apply(code: UInt, pc: UInt, addr: UInt = 0.U): ExceptionInfo = {
+  def none:                                          ExceptionInfo = 0.U.asTypeOf(new ExceptionInfo)
+  def apply(code: UInt, pc: UInt, tval: UInt = 0.U): ExceptionInfo = {
     val w = Wire(new ExceptionInfo)
     w.code := code
     w.pc   := pc
-    w.addr := addr
+    w.tval := tval
     w
   }
 }
@@ -178,10 +178,10 @@ class PipeISInput extends Bundle {
 }
 
 class PipeLSUInput extends Bundle {
-  val valid  = Input(Bool())
-  val rdata  = Input(UInt(32.W))
-  val except = Input(new ExceptionInfo)
-  val stall  = Input(Bool())
+  val valid     = Input(Bool())
+  val rdata     = Input(UInt(32.W))
+  val except    = Input(new ExceptionInfo)
+  val stall     = Input(Bool())
   val cacheable = Input(Bool())
 }
 
@@ -191,7 +191,6 @@ class PipeCSRInput extends Bundle {
   val wdata  = Input(UInt(32.W))
   val except = Input(new ExceptionInfo)
   val br     = Input(new BrInfo)
-  val tvec   = Input(UInt(32.W))
 }
 
 class PipeDIVInput extends Bundle {
@@ -218,7 +217,6 @@ class PipeInfo extends Bundle {
   val rs2_id    = UInt(3.W)
   val result    = UInt(32.W)
   val rdy_stage = UInt(2.W)
-  val except    = new ExceptionInfo
   val commit    = Bool()
   val stall     = Bool()
 
@@ -228,17 +226,20 @@ class PipeInfo extends Bundle {
     val wen   = Bool()
   }
 
+  val except = new ExceptionInfo
+
   val mem = new Bundle {
     val cacheable = Bool()
   }
 
-  def isLd:  Bool = valid && info.isLSU && info.wen
-  def isBr:  Bool = valid && info.isBr && !info.wen
-  def isSt:  Bool = valid && info.isLSU && !info.wen
-  def isMul: Bool = valid && info.isMUL
-  def isJmp: Bool = valid && info.isBr && info.wen
-  def isALU: Bool = valid && info.isEXU && !info.isBr
-  def isMem: Bool = isLd || isSt
+  def isLd:   Bool = valid && info.isLSU && info.wen
+  def isBr:   Bool = valid && info.isBr && !info.wen
+  def isSt:   Bool = valid && info.isLSU && !info.wen
+  def isMul:  Bool = valid && info.isMUL
+  def isJmp:  Bool = valid && info.isBr && info.wen
+  def isALU:  Bool = valid && info.isEXU && !info.isBr
+  def isMem:  Bool = isLd || isSt
+  def isTrap: Bool = valid && except.valid
 
   def rdIdx: UInt = info.inst(11, 7)
 }
@@ -249,7 +250,6 @@ class ISCSRInput extends Bundle {
   val rdata  = Input(UInt(32.W))
   val wdata  = Input(UInt(32.W))
   val except = Input(new ExceptionInfo)
-  val tvec   = Input(UInt(32.W))
 }
 
 class ISEXUInput extends Bundle {
@@ -259,10 +259,10 @@ class ISEXUInput extends Bundle {
 }
 
 class ISCSROutput extends Bundle {
-  val wen     = Output(Bool())
-  val waddr   = Output(UInt(12.W))
-  val wdata   = Output(UInt(32.W))
-  val except  = Output(new ExceptionInfo)
+  val wen    = Output(Bool())
+  val waddr  = Output(UInt(12.W))
+  val wdata  = Output(UInt(32.W))
+  val except = Output(new ExceptionInfo)
 }
 
 class BypassISInfo extends Bundle {

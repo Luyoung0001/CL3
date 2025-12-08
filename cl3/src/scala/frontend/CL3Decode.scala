@@ -15,10 +15,10 @@ class CL3Decode extends Module {
   val decoder = Seq.fill(2)(Module(new CL3Decoder))
 
   for (i <- 0 until 2) {
-    decoder(i).io.inst  := io.in.bits(i).inst
-    decoder(i).io.pc    := io.in.bits(i).pc
-    decoder(i).io.pred  := io.in.bits(i).pred
-    decoder(i).io.fault_fetch  := io.in.bits(i).fault_fetch
+    decoder(i).io.inst        := io.in.bits(i).inst
+    decoder(i).io.pc          := io.in.bits(i).pc
+    decoder(i).io.pred        := io.in.bits(i).pred
+    decoder(i).io.fault_fetch := io.in.bits(i).fault_fetch
     decoder(i).io.fault_page  := io.in.bits(i).fault_page
 
     io.out.bits(i) := decoder(i).io.out

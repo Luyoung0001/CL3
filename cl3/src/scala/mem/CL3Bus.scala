@@ -10,7 +10,7 @@ class SimpleMemReq(xlen: Int) extends Bundle {
   val wdata     = UInt(xlen.W)
   val mask      = UInt(4.W)
   val cacheable = Bool()
-  
+
   def connect(source: SimpleMemReq): Unit = {
     this.addr      := source.addr
     this.wen       := source.wen

@@ -19,10 +19,10 @@ class DecodeFIFO extends Module with DecodeFIFOConfig {
     val valid = Bool()
   }
 
-  val entrys    = RegInit(VecInit(Seq.fill(FIFODepth)(0.U.asTypeOf(new FIFOEntry))))
-  val rd_ptr_q  = RegInit(0.U(log2Ceil(FIFODepth).W))
-  val wr_ptr_q  = RegInit(0.U(log2Ceil(FIFODepth).W))
-  val count_q   = RegInit(0.U((log2Ceil(FIFODepth) + 1).W))
+  val entrys   = RegInit(VecInit(Seq.fill(FIFODepth)(0.U.asTypeOf(new FIFOEntry))))
+  val rd_ptr_q = RegInit(0.U(log2Ceil(FIFODepth).W))
+  val wr_ptr_q = RegInit(0.U(log2Ceil(FIFODepth).W))
+  val count_q  = RegInit(0.U((log2Ceil(FIFODepth) + 1).W))
 
   io.in.ready := ((FIFODepth.U - count_q) >= 2.U)
 
@@ -48,11 +48,10 @@ class DecodeFIFO extends Module with DecodeFIFOConfig {
   }
 
   when(push && !io.flush) {
-    entrys(wr_ptr_q).info := io.in.bits(0)
-    entrys(wr_ptr_q +% 1.U).info := io.in.bits(1) //TODO:
-    entrys(wr_ptr_q +% 1.U).valid := !io.in.bits(0).pred //TODO:
+    entrys(wr_ptr_q).info         := io.in.bits(0)
+    entrys(wr_ptr_q +% 1.U).info  := io.in.bits(1)       // TODO:
+    entrys(wr_ptr_q +% 1.U).valid := !io.in.bits(0).pred // TODO:
   }
-
 
   when(io.flush) {
     wr_ptr_q := 0.U
@@ -64,11 +63,11 @@ class DecodeFIFO extends Module with DecodeFIFOConfig {
     rd_ptr_q := 0.U
   }.elsewhen(pop0 && !pop1) {
     entrys(rd_ptr_q).valid := false.B
-    rd_ptr_q := next_ptr
+    rd_ptr_q               := next_ptr
   }.elsewhen(pop1) {
     entrys(rd_ptr_q).valid := false.B
     entrys(next_ptr).valid := false.B
-    rd_ptr_q := next_ptr +% 1.U
+    rd_ptr_q               := next_ptr +% 1.U
   }
 
   when(io.flush) {

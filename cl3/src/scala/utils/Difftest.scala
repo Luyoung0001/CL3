@@ -4,14 +4,14 @@ import chisel3._
 import chisel3.util._
 
 class DiffInfo extends Bundle {
-  val pc     = UInt(32.W)
-  val npc    = UInt(32.W)
-  val inst   = UInt(32.W)
-  val rdIdx  = UInt(5.W)
-  val wen    = Bool()
-  val wdata  = UInt(32.W)
-  val commit = Bool()
-  val skip   = Bool()
+  val pc        = UInt(32.W)
+  val npc       = UInt(32.W)
+  val inst      = UInt(32.W)
+  val rdIdx     = UInt(5.W)
+  val wen       = Bool()
+  val wdata     = UInt(32.W)
+  val commit    = Bool()
+  val skip      = Bool()
   val csr_wen   = Bool()
   val csr_wdata = UInt(32.W)
   val csr_waddr = UInt(12.W)

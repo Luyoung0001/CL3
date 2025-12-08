@@ -5,52 +5,50 @@ import chisel3.util._
 import cl3.SramAddr._
 
 class dcache_core_data_ramDev(p: DCacheParams) extends Module {
-    val io = IO(new DCacheDataRamIO(p))
+  val io = IO(new DCacheDataRamIO(p))
 
-    val dataBits     = p.dataW
-    val byteCount    = dataBits / 8
-    val depthPerBank = 1 << (p.dataIdxW - p.bankSelBits)
-    val banks        = p.banks
+  val dataBits     = p.dataW
+  val byteCount    = dataBits / 8
+  val depthPerBank = 1 << (p.dataIdxW - p.bankSelBits)
+  val banks        = p.banks
 
-    val memBanks = Seq.fill(banks) {
-        SyncReadMem(depthPerBank, Vec(byteCount, UInt(8.W)))
-    }
-    // 地址拆分
-    val p0_bank = bankSel(io.p0.addr)   // UInt
-    val p0_bank_reg = RegNext(p0_bank)
-    val p0_row  = rowAddr(io.p0.addr)   // UInt
+  val memBanks    = Seq.fill(banks) {
+    SyncReadMem(depthPerBank, Vec(byteCount, UInt(8.W)))
+  }
+  // 地址拆分
+  val p0_bank     = bankSel(io.p0.addr) // UInt
+  val p0_bank_reg = RegNext(p0_bank)
+  val p0_row      = rowAddr(io.p0.addr) // UInt
 
-    val p1_wen   = io.p1.wstrb.orR
-    val p1_bank  = bankSel(io.p1.addr)
-    val p1_row   = rowAddr(io.p1.addr)
+  val p1_wen  = io.p1.wstrb.orR
+  val p1_bank = bankSel(io.p1.addr)
+  val p1_row  = rowAddr(io.p1.addr)
 
-    val p1_wdata_bytes = VecInit(Seq.tabulate(byteCount)(i =>
-        io.p1.wdata(8 * (i + 1) - 1, 8 * i)
-    ))
-    val p1_wmask_bytes = io.p1.wstrb // UInt(byteCount.W)
+  val p1_wdata_bytes = VecInit(Seq.tabulate(byteCount)(i => io.p1.wdata(8 * (i + 1) - 1, 8 * i)))
+  val p1_wmask_bytes = io.p1.wstrb // UInt(byteCount.W)
 
-    // ---------------- p0：同步读（无旁路） ----------------
-    val p0_rdata_q = WireDefault(0.U(dataBits.W))
-    val p0_raw_vec = Wire(Vec(byteCount, UInt(8.W)))
-    p0_raw_vec := VecInit(Seq.fill(byteCount)(0.U(8.W)))
+  // ---------------- p0：同步读（无旁路） ----------------
+  val p0_rdata_q = WireDefault(0.U(dataBits.W))
+  val p0_raw_vec = Wire(Vec(byteCount, UInt(8.W)))
+  p0_raw_vec := VecInit(Seq.fill(byteCount)(0.U(8.W)))
 
-    val doutVec = Wire(Vec(memBanks.length, UInt(dataBits.W)))
-    for (i <- 0 until memBanks.length) {
-      val rdBytes = memBanks(i).read(p0_row, true.B)
-      doutVec(i) := rdBytes.asUInt
-    }
-    p0_rdata_q := doutVec(p0_bank_reg)
-    io.p0.rdata := p0_rdata_q
-    io.p1.rdata := p0_rdata_q
+  val doutVec = Wire(Vec(memBanks.length, UInt(dataBits.W)))
+  for (i <- 0 until memBanks.length) {
+    val rdBytes = memBanks(i).read(p0_row, true.B)
+    doutVec(i) := rdBytes.asUInt
+  }
+  p0_rdata_q := doutVec(p0_bank_reg)
+  io.p0.rdata := p0_rdata_q
+  io.p1.rdata := p0_rdata_q
 
-    when (p1_wen) {
+  when(p1_wen) {
     for (b <- 0 until banks) {
-        when (p1_bank === b.U) {
-            val wmaskVec = VecInit(Seq.tabulate(byteCount)(i => p1_wmask_bytes(i)))
-                memBanks(b).write(p1_row, p1_wdata_bytes, wmaskVec)
-            }
-        }
+      when(p1_bank === b.U) {
+        val wmaskVec = VecInit(Seq.tabulate(byteCount)(i => p1_wmask_bytes(i)))
+        memBanks(b).write(p1_row, p1_wdata_bytes, wmaskVec)
+      }
     }
+  }
 
 }
 
@@ -66,7 +64,6 @@ class dcache_core_data_ramDev(p: DCacheParams) extends Module {
 //     // UInt <-> Vec[Bool]
 //     private def u2bVec(x: UInt, width: Int): Vec[Bool] = VecInit(Seq.tabulate(width)(i => x(i)))
 //     private def bVec2u(v: Vec[Bool]): UInt = v.asUInt
-
 
 //     // ---------------- p0: 只读 ----------------
 //     val p0_bank = bankSel(io.p0.addr)

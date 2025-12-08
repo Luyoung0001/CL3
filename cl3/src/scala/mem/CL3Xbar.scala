@@ -21,8 +21,8 @@ class CL3Xbar extends Module {
   io.top.w.bits    := io.xbar.w.bits
 
   // -------------------- READ CHANNEL --------------------
-  val arToClint   = io.xbar.ar.bits.araddr(31, 24) === CLINT_ADDR_PREFIX
-  val readActive  = RegInit(false.B)
+  val arToClint    = io.xbar.ar.bits.araddr(31, 24) === CLINT_ADDR_PREFIX
+  val readActive   = RegInit(false.B)
   val readSelClint = RegInit(false.B)
 
   io.clint.ar.valid := io.xbar.ar.valid && arToClint && !readActive
@@ -38,14 +38,14 @@ class CL3Xbar extends Module {
     readActive := false.B
   }
 
-  io.xbar.r.valid      := Mux(readSelClint, io.clint.r.valid, io.top.r.valid)
-  io.xbar.r.bits       := Mux(readSelClint, io.clint.r.bits, io.top.r.bits)
-  io.clint.r.ready     := io.xbar.r.ready && readSelClint
-  io.top.r.ready       := io.xbar.r.ready && !readSelClint
+  io.xbar.r.valid  := Mux(readSelClint, io.clint.r.valid, io.top.r.valid)
+  io.xbar.r.bits   := Mux(readSelClint, io.clint.r.bits, io.top.r.bits)
+  io.clint.r.ready := io.xbar.r.ready && readSelClint
+  io.top.r.ready   := io.xbar.r.ready && !readSelClint
 
   // -------------------- WRITE CHANNEL --------------------
-  val awToClint      = io.xbar.aw.bits.awaddr(31, 24) === CLINT_ADDR_PREFIX
-  val writeActiveReg = RegInit(false.B)
+  val awToClint        = io.xbar.aw.bits.awaddr(31, 24) === CLINT_ADDR_PREFIX
+  val writeActiveReg   = RegInit(false.B)
   val writeSelClintReg = RegInit(false.B)
 
   io.clint.aw.valid := io.xbar.aw.valid && awToClint && !writeActiveReg
@@ -57,8 +57,8 @@ class CL3Xbar extends Module {
     writeSelClintReg := awToClint
   }
 
-  val haveWriteSel      = writeActiveReg || io.xbar.aw.fire
-  val curWriteSelClint  = Mux(writeActiveReg, writeSelClintReg, awToClint)
+  val haveWriteSel     = writeActiveReg || io.xbar.aw.fire
+  val curWriteSelClint = Mux(writeActiveReg, writeSelClintReg, awToClint)
 
   io.clint.w.valid := io.xbar.w.valid && haveWriteSel && curWriteSelClint
   io.top.w.valid   := io.xbar.w.valid && haveWriteSel && !curWriteSelClint
@@ -73,10 +73,6 @@ class CL3Xbar extends Module {
     writeActiveReg := false.B
   }
 }
-
-
-
-
 
 class SimpleReqArbiter extends Module {
   val io = IO(new Bundle {

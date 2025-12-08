@@ -224,12 +224,12 @@ object BRField extends BoolDecodeField[InstructionPattern] {
 class CL3Decoder extends Module {
 
   val io = IO(new Bundle {
-    val inst  = Input(UInt(32.W))
-    val pc    = Input(UInt(32.W))
-    val pred  = Input(Bool())
-    val fault_fetch = Input(Bool()) 
+    val inst        = Input(UInt(32.W))
+    val pc          = Input(UInt(32.W))
+    val pred        = Input(Bool())
+    val fault_fetch = Input(Bool())
     val fault_page  = Input(Bool())
-    val out   = Output(new DEInfo())
+    val out         = Output(new DEInfo())
   })
 
   import CL3InstInfo._
@@ -252,9 +252,9 @@ class CL3Decoder extends Module {
   io.out.inst := io.inst
 
   // TODO: use BoringUtil API
-  io.out.pc    := io.pc
-  io.out.pred  := io.pred
+  io.out.pc          := io.pc
+  io.out.pred        := io.pred
   io.out.fault_fetch := io.fault_fetch
-  io.out.fault_page := io.fault_page
+  io.out.fault_page  := io.fault_page
 
 }

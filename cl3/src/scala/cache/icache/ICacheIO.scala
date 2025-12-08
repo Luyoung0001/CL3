@@ -10,12 +10,11 @@ class ICacheCpuIO(p: ICacheParams) extends Bundle {
   val req_invalidate = Input(Bool())
   val req_pc         = Input(UInt(p.pcBits.W))
 
-
   // Outputs
-  val resp_accept     = Output(Bool())
-  val resp_valid      = Output(Bool())
-  val resp_error      = Output(Bool())
-  val resp_inst       = Output(UInt(p.instBits.W))
+  val resp_accept = Output(Bool())
+  val resp_valid  = Output(Bool())
+  val resp_error  = Output(Bool())
+  val resp_inst   = Output(UInt(p.instBits.W))
 }
 
 class ICacheIO(p: ICacheParams) extends Bundle {

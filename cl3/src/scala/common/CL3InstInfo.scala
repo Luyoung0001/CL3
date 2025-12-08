@@ -7,7 +7,7 @@ import chisel3.util.experimental.decode
 object CL3InstInfo {
   val instPatterns = Seq(
     // EXEC (General-Purpose Execution Instructions)
-    InstructionPattern(instType = "U", opType = "EXEC", name = "lui",   opcode = BitPat("b0110111")),
+    InstructionPattern(instType = "U", opType = "EXEC", name = "lui", opcode = BitPat("b0110111")),
     InstructionPattern(instType = "U", opType = "EXEC", name = "auipc", opcode = BitPat("b0010111")),
     InstructionPattern(
       instType = "I",
@@ -381,7 +381,7 @@ object CL3InstInfo {
     // SYS (System Instructions)
     InstructionPattern(
       instType = "I",
-      opType = "SYS", //TODO:
+      opType = "SYS", // TODO:
       name = "fence",
       func3 = BitPat("b000"),
       opcode = BitPat("b0001111")
@@ -412,10 +412,30 @@ object CL3InstInfo {
       func3 = BitPat("b000"),
       opcode = BitPat("b1110011")
     ),
-
-    InstructionPattern(instType = "R", opType = "MUL", name = "clmul",  func7 = BitPat("b0000101"), func3 = BitPat("b001"), opcode = BitPat("b0110011")),
-    InstructionPattern(instType = "R", opType = "MUL", name = "clmulh", func7 = BitPat("b0000101"), func3 = BitPat("b011"), opcode = BitPat("b0110011")),
-    InstructionPattern(instType = "R", opType = "MUL", name = "clmulr", func7 = BitPat("b0000101"), func3 = BitPat("b010"), opcode = BitPat("b0110011"))
+    InstructionPattern(
+      instType = "R",
+      opType = "MUL",
+      name = "clmul",
+      func7 = BitPat("b0000101"),
+      func3 = BitPat("b001"),
+      opcode = BitPat("b0110011")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "MUL",
+      name = "clmulh",
+      func7 = BitPat("b0000101"),
+      func3 = BitPat("b011"),
+      opcode = BitPat("b0110011")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "MUL",
+      name = "clmulr",
+      func7 = BitPat("b0000101"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0110011")
+    )
   )
 
   val allFields = Seq(
@@ -429,7 +449,7 @@ object CL3InstInfo {
     MULField,
     DIVField,
     CSRField,
-    BRField,
+    BRField
   )
 
 }

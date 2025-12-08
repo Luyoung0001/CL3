@@ -1,12 +1,12 @@
 #ifndef __AMUNIT_H__
 #define __AMUNIT_H__
 
-#include <am.h>
+// #include <am.h>
 #include <klib.h>
 #include <klib-macros.h>
 
-#define IOE ({ ioe_init();  })
-#define CTE(h) ({ Context *h(Event, Context *); cte_init(h); })
+// #define IOE ({ ioe_init();  })
+// #define CTE(h) ({ Context *h(Event, Context *); cte_init(h); })
 
 extern void (*entry)();
 

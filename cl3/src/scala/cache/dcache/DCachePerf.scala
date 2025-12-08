@@ -8,37 +8,37 @@ import chisel3.util.experimental.BoringUtils
 class DCachePerf(p: DCacheParams) extends Module {
   val io = IO(new Bundle {
     // Event pulses from DCache
-    val ev_req_fire         = Input(Bool())                          // any request accepted
-    val ev_read_req         = Input(Bool())                          // read request accepted
-    val ev_write_req        = Input(Bool())                          // write request accepted
-    val ev_miss             = Input(Bool())                          // miss detected
-    val ev_refill_beat_fire = Input(Bool())                          // refill beat (r.valid)
-    val ev_refill_line_last = Input(Bool())                          // last beat of line
-    val ev_miss_penalty_cyc = Input(Bool())                          // cycles spent handling miss/refill
-    val ev_writeback        = Input(Bool())                          // writeback to memory
-    val ev_amo              = Input(Bool())                          // atomic op issued
+    val ev_req_fire         = Input(Bool()) // any request accepted
+    val ev_read_req         = Input(Bool()) // read request accepted
+    val ev_write_req        = Input(Bool()) // write request accepted
+    val ev_miss             = Input(Bool()) // miss detected
+    val ev_refill_beat_fire = Input(Bool()) // refill beat (r.valid)
+    val ev_refill_line_last = Input(Bool()) // last beat of line
+    val ev_miss_penalty_cyc = Input(Bool()) // cycles spent handling miss/refill
+    val ev_writeback        = Input(Bool()) // writeback to memory
+    val ev_amo              = Input(Bool()) // atomic op issued
 
   })
 
-  val req_cnt           = RegInit(0.U(64.W))
-  val read_req_cnt      = RegInit(0.U(64.W))
-  val write_req_cnt     = RegInit(0.U(64.W))
-  val miss_cnt          = RegInit(0.U(64.W))
-  val refill_beat_cnt   = RegInit(0.U(64.W))
-  val refill_line_cnt   = RegInit(0.U(64.W))
-  val miss_penalty_cnt  = RegInit(0.U(64.W))
-  val writeback_cnt     = RegInit(0.U(64.W))
-  val amo_cnt           = RegInit(0.U(64.W))
+  val req_cnt          = RegInit(0.U(64.W))
+  val read_req_cnt     = RegInit(0.U(64.W))
+  val write_req_cnt    = RegInit(0.U(64.W))
+  val miss_cnt         = RegInit(0.U(64.W))
+  val refill_beat_cnt  = RegInit(0.U(64.W))
+  val refill_line_cnt  = RegInit(0.U(64.W))
+  val miss_penalty_cnt = RegInit(0.U(64.W))
+  val writeback_cnt    = RegInit(0.U(64.W))
+  val amo_cnt          = RegInit(0.U(64.W))
 
-  when(io.ev_req_fire)         { req_cnt          := req_cnt + 1.U }
-  when(io.ev_read_req)         { read_req_cnt     := read_req_cnt + 1.U }
-  when(io.ev_write_req)        { write_req_cnt    := write_req_cnt + 1.U }
-  when(io.ev_miss)             { miss_cnt         := miss_cnt + 1.U }
-  when(io.ev_refill_beat_fire) { refill_beat_cnt  := refill_beat_cnt + 1.U }
-  when(io.ev_refill_line_last) { refill_line_cnt  := refill_line_cnt + 1.U }
+  when(io.ev_req_fire) { req_cnt := req_cnt + 1.U }
+  when(io.ev_read_req) { read_req_cnt := read_req_cnt + 1.U }
+  when(io.ev_write_req) { write_req_cnt := write_req_cnt + 1.U }
+  when(io.ev_miss) { miss_cnt := miss_cnt + 1.U }
+  when(io.ev_refill_beat_fire) { refill_beat_cnt := refill_beat_cnt + 1.U }
+  when(io.ev_refill_line_last) { refill_line_cnt := refill_line_cnt + 1.U }
   when(io.ev_miss_penalty_cyc) { miss_penalty_cnt := miss_penalty_cnt + 1.U }
-  when(io.ev_writeback)        { writeback_cnt    := writeback_cnt + 1.U }
-  when(io.ev_amo)              { amo_cnt          := amo_cnt + 1.U }
+  when(io.ev_writeback) { writeback_cnt := writeback_cnt + 1.U }
+  when(io.ev_amo) { amo_cnt := amo_cnt + 1.U }
 
   val dcachePerf = Module(new DCachePerfHelper)
 
@@ -63,21 +63,21 @@ class DCachePerf(p: DCacheParams) extends Module {
   // BoringUtils.addSource(io.amo_count,           "dcache_perf_amo_count")
 }
 
-
 class DCachePerfHelper extends BlackBox with HasBlackBoxInline {
-    val io = IO(new Bundle {
-      val req_count           = Input(UInt(64.W))
-      val read_req_count      = Input(UInt(64.W))
-      val write_req_count     = Input(UInt(64.W))
-      val miss_count          = Input(UInt(64.W))
-      val refill_beat_count   = Input(UInt(64.W))
-      val refill_line_count   = Input(UInt(64.W))
-      val miss_penalty_cycles = Input(UInt(64.W))
-      val writeback_count     = Input(UInt(64.W))
-      val amo_count           = Input(UInt(64.W))
-    })
-    setInline("dcache_perf.sv",
-      s"""
+  val io = IO(new Bundle {
+    val req_count           = Input(UInt(64.W))
+    val read_req_count      = Input(UInt(64.W))
+    val write_req_count     = Input(UInt(64.W))
+    val miss_count          = Input(UInt(64.W))
+    val refill_beat_count   = Input(UInt(64.W))
+    val refill_line_count   = Input(UInt(64.W))
+    val miss_penalty_cycles = Input(UInt(64.W))
+    val writeback_count     = Input(UInt(64.W))
+    val amo_count           = Input(UInt(64.W))
+  })
+  setInline(
+    "dcache_perf.sv",
+    s"""
         module DCachePerfHelper (
           input logic [63:0] req_count,             
           input logic [63:0] read_req_count,             
@@ -116,6 +116,5 @@ class DCachePerfHelper extends BlackBox with HasBlackBoxInline {
           end
         endmodule
       """.stripMargin
-
-    )
+  )
 }

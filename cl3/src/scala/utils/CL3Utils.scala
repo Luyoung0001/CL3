@@ -25,7 +25,7 @@ class LFSR(addrWidth: Int, initialValue: Int = 0x0001, tapValue: Int = 0xb400) e
   val lfsr = RegInit(initialValue.U(16.W))
 
   when(io.alloc) {
-    val nextLfsr = Mux(lfsr(0), (lfsr(15, 1) ^ tapValue.U),  lfsr(15, 1))
+    val nextLfsr = Mux(lfsr(0), (lfsr(15, 1) ^ tapValue.U), lfsr(15, 1))
     lfsr := 0.U(1.W) ## nextLfsr
   }
 

@@ -5,22 +5,22 @@ import chisel3.util._
 
 // CPU <-> DCache
 class MemReq(p: DCacheParams) extends Bundle {
-  val addr        = UInt(p.addrW.W)
-  val dataWr      = UInt(p.dataW.W)
-  val rd          = Bool()
-  val wr          = UInt(p.wstrbW.W)
-  val cacheable   = Bool()
-  val reqTag      = UInt(p.reqTagW.W)
-  val invalidate  = Bool()
-  val writeback   = Bool()
-  val flush       = Bool()
+  val addr       = UInt(p.addrW.W)
+  val dataWr     = UInt(p.dataW.W)
+  val rd         = Bool()
+  val wr         = UInt(p.wstrbW.W)
+  val cacheable  = Bool()
+  val reqTag     = UInt(p.reqTagW.W)
+  val invalidate = Bool()
+  val writeback  = Bool()
+  val flush      = Bool()
 }
 
 class MemResp(p: DCacheParams) extends Bundle {
-  val dataRd    = UInt(p.dataW.W)
-  val ack       = Bool()
-  val error     = Bool()
-  val respTag   = UInt(p.reqTagW.W)
+  val dataRd  = UInt(p.dataW.W)
+  val ack     = Bool()
+  val error   = Bool()
+  val respTag = UInt(p.reqTagW.W)
 }
 
 class CpuMemPort(p: DCacheParams) extends Bundle {
@@ -31,12 +31,12 @@ class CpuMemPort(p: DCacheParams) extends Bundle {
 
 // DCache <-> PMEM
 class PMemReq(p: DCacheParams) extends Bundle {
-  val wr        = Bool()
-  val valid     = Bool()
-  val len       = UInt(p.lenW.W)
-  val addr      = UInt(p.addrW.W)
-  val id        = UInt(p.idW.W)
-  val burst     = UInt(p.burstW.W)
+  val wr    = Bool()
+  val valid = Bool()
+  val len   = UInt(p.lenW.W)
+  val addr  = UInt(p.addrW.W)
+  val id    = UInt(p.idW.W)
+  val burst = UInt(p.burstW.W)
 
 }
 
@@ -68,7 +68,7 @@ class PMemPortAxi2(p: DCacheParams) extends Bundle {
 
 // DCache_Mux, Cached/UnCached
 class TwoMemBacks(p: DCacheParams) extends Bundle {
-  val cached = new Bundle {
+  val cached   = new Bundle {
     val req    = Input(new MemReq(p))
     val resp   = Output(new MemResp(p))
     val accept = Output(Bool())
@@ -87,10 +87,10 @@ class DCacheMuxIO(p: DCacheParams) extends Bundle {
 }
 
 class DCachePmemMuxIO(p: DCacheParams) extends Bundle {
-    val outport   = Flipped(new PMemPortAxi(p))
-    val in0port   = new PMemPortAxi(p)
-    val in1port   = new PMemPortAxi(p)
-    val select_i  = Input(Bool())
+  val outport  = Flipped(new PMemPortAxi(p))
+  val in0port  = new PMemPortAxi(p)
+  val in1port  = new PMemPortAxi(p)
+  val select_i = Input(Bool())
 }
 
 // DCache Core
@@ -107,11 +107,11 @@ class DCacheIfPMemIO(p: DCacheParams) extends Bundle {
 }
 
 // Tag RAM
-class TagRamPort0(p: DCacheParams) extends Bundle {
+class TagRamPort0(p: DCacheParams)    extends Bundle {
   val addr  = Input(UInt(p.tagIdxW.W))
   val rdata = Output(UInt(p.tagEntryW.W))
 }
-class TagRamPort1(p: DCacheParams) extends Bundle {
+class TagRamPort1(p: DCacheParams)    extends Bundle {
   val addr  = Input(UInt(p.tagIdxW.W))
   val wdata = Input(UInt(p.tagEntryW.W))
   val wen   = Input(Bool())
@@ -122,7 +122,7 @@ class DCacheTagRamIO(p: DCacheParams) extends Bundle {
 }
 
 // Data RAM
-class DataRamRWPort(p: DCacheParams) extends Bundle {
+class DataRamRWPort(p: DCacheParams)   extends Bundle {
   val addr  = Input(UInt(p.dataIdxW.W))
   val wdata = Input(UInt(p.dataW.W))
   val wstrb = Input(UInt(p.wstrbW.W))
@@ -139,52 +139,52 @@ class DCacheAxiIO(p: DCacheParams) extends Bundle {
 }
 
 class DCacheAxitoAXiIO(p: DCacheParams) extends Bundle {
-  val pmem = new PMemPortAxi2(p)
-  val out_axi  = new Axi4MasterIO(p.axi)
-  val in_axi = new Axi4SlaveIO(p.axi)
+  val pmem    = new PMemPortAxi2(p)
+  val out_axi = new Axi4MasterIO(p.axi)
+  val in_axi  = new Axi4SlaveIO(p.axi)
 }
 
 class DCacheTopIO(p: DCacheParams) extends Bundle {
   val cpu = new CpuMemPort(p)
-  val axi  = new Axi4MasterIO(p.axi)
-  val amo  = new AmoBundle()
+  val axi = new Axi4MasterIO(p.axi)
+  val amo = new AmoBundle()
 }
 
 class DCacheAxiFifoIO(WIDTH: Int, DEPTH: Int, ADDR_W: Int) extends Bundle {
-    val in_data = Input(UInt(WIDTH.W))
-    val push_i  = Input(Bool())
-    val pop_i   = Input(Bool())
+  val in_data = Input(UInt(WIDTH.W))
+  val push_i  = Input(Bool())
+  val pop_i   = Input(Bool())
 
-    val out_data = Output(UInt(WIDTH.W))
-    val accept_o = Output(Bool())
-    val valid_o  = Output(Bool())
+  val out_data = Output(UInt(WIDTH.W))
+  val accept_o = Output(Bool())
+  val valid_o  = Output(Bool())
 }
 
 object amoOp extends ChiselEnum {
-    val AMOSWAP   = Value(0.U)
-    val AMOADD    = Value(1.U)
-    val AMOXOR    = Value(2.U)
-    val AMOAND    = Value(3.U)
-    val AMOOR     = Value(4.U)
-    val AMOMIN    = Value(5.U)
-    val AMOMAX    = Value(6.U)
-    val AMOMINU   = Value(7.U)
-    val AMOMAXU   = Value(8.U)
+  val AMOSWAP = Value(0.U)
+  val AMOADD  = Value(1.U)
+  val AMOXOR  = Value(2.U)
+  val AMOAND  = Value(3.U)
+  val AMOOR   = Value(4.U)
+  val AMOMIN  = Value(5.U)
+  val AMOMAX  = Value(6.U)
+  val AMOMINU = Value(7.U)
+  val AMOMAXU = Value(8.U)
 }
 
-class AmoBundle extends Bundle{
-    val isAmo = Input(Bool())
-    val isLR  = Input(Bool())
-    val isSC  = Input(Bool())
-    val amoCode = Input(amoOp())
-    // val aq    = Input(Bool()) // ooo
-    // val rl    = Input(Bool())
-    val scSuccess = Output(Bool())
+class AmoBundle extends Bundle {
+  val isAmo     = Input(Bool())
+  val isLR      = Input(Bool())
+  val isSC      = Input(Bool())
+  val amoCode   = Input(amoOp())
+  // val aq    = Input(Bool()) // ooo
+  // val rl    = Input(Bool())
+  val scSuccess = Output(Bool())
 }
 
 case class WB(p: DCacheParams) {
-    val valid = RegInit(false.B)
-    val row   = Reg(UInt((p.dataIdxW - p.bankSelBits).W))
-    val data  = Reg(UInt(p.dataW.W))
-    val mask  = Reg(UInt(p.dataW.W))
+  val valid = RegInit(false.B)
+  val row   = Reg(UInt((p.dataIdxW - p.bankSelBits).W))
+  val data  = Reg(UInt(p.dataW.W))
+  val mask  = Reg(UInt(p.dataW.W))
 }
