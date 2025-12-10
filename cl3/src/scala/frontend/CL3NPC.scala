@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 
 trait NPCConfig {
-  val numBTBEntries:       Int = 32
+  val numBTBEntries:       Int = 64
   val numGlobalPHTEntries: Int = 256
   val numRasEntries:       Int = 6
   val numGlobalPHTWidth:   Int = log2Ceil(numGlobalPHTEntries)
@@ -30,7 +30,7 @@ class CL3NPC() extends Module with NPCConfig with CL3Config {
     btb.io.wr.wen := io.bp.valid && io.mispred && io.bp.isTaken
 
     btb.io.wr.pc           := io.bp.source(31, 2)
-    btb.io.wr.wdata.target := io.bp.target
+    btb.io.wr.wdata.target := io.bp.target(31, 2)
     btb.io.wr.wdata.isCall := io.bp.isCall
     btb.io.wr.wdata.isJmp  := io.bp.isJmp
     btb.io.wr.wdata.isRet  := io.bp.isRet
@@ -131,12 +131,12 @@ class CL3NPC() extends Module with NPCConfig with CL3Config {
     val npc0 = Mux(
       pc0_is_ret,
       ras_npc,
-      Mux(btb.io.rd(0).hit && (pht_is_taken(0) || btb_entry(0).isJmp), btb_entry(0).target, pc_plus_8)
+      Mux(btb.io.rd(0).hit && (pht_is_taken(0) || btb_entry(0).isJmp), btb_entry(0).target ## 0.U(2.W), pc_plus_8)
     )
     val npc1 = Mux(
       pc1_is_ret,
       ras_npc,
-      Mux(btb.io.rd(1).hit && (pht_is_taken(1) || btb_entry(1).isJmp), btb_entry(1).target, pc_plus_8)
+      Mux(btb.io.rd(1).hit && (pht_is_taken(1) || btb_entry(1).isJmp), btb_entry(1).target ## 0.U(2.W), pc_plus_8)
     )
 
     io.info.npc := Mux(bp_trigger0, npc0, Mux(bp_trigger1, npc1, pc_plus_8))
