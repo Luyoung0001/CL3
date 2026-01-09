@@ -21,7 +21,7 @@ class LSUIO extends Bundle {
   val out = new LSUOutput
 }
 
-class CL3LSU extends Module with LSUConstant {
+class CL3LSU extends Module with LSUConstant with CL3Config {
 
   val io = IO(new LSUIO)
 
@@ -33,10 +33,21 @@ class CL3LSU extends Module with LSUConstant {
 
   val Iimm = SignExt(inst(31, 20), 32)
   val Simm = SignExt(Cat(inst(31, 25), inst(11, 7)), 32)
+  
+  val atoOn: Bool = if (EnableAtomic) true.B else false.B
+  val is_ato   = op(LSU_A_LS_BIT) && atoOn
+  dontTouch(op)
+  dontTouch(is_ato)
+  val is_load  = !op(LSU_LS_BIT) && !is_ato
+  dontTouch(is_load)
+  val is_store = op(LSU_LS_BIT) && !is_ato
+  dontTouch(is_store)
 
-  val is_load  = !op(LSU_LS_BIT)
-  val is_store = op(LSU_LS_BIT)
-  val addr     = io.in.info.rs1 + Mux(is_load, Iimm, Simm)
+  val is_lr    = is_ato && !op(LSU_A_LS_BIT - 1, 0).orR
+  val is_sc    = is_ato && ((op(LSU_A_LS_BIT - 1, 0)) === 1.U)
+  val is_amo   = is_ato && !(is_lr | is_sc)
+
+  val addr     = io.in.info.rs1 + Mux(is_ato, 0.U, Mux(is_load, Iimm, Simm))
 
   val complete_err_w = io.in.mem.bits.err.orR && io.in.mem.valid
 
@@ -62,7 +73,7 @@ class CL3LSU extends Module with LSUConstant {
   val pending = outstanding_q && !io.in.mem.valid
 
   val req_q       = RegInit(0.U.asTypeOf(new CL3DCacheReq))
-  val op_q        = RegInit(0.U(4.W))
+  val op_q        = RegInit(0.U(5.W))
   val req_pc_q    = RegInit(0.U(32.W))
   val req_valid_q = RegInit(false.B)
 
@@ -80,11 +91,23 @@ class CL3LSU extends Module with LSUConstant {
     req_q.wen       := is_store
     req_q.mask      := mask
     req_q.cacheable := (addr(31, 28) === "h8".U(4.W)) // TODO:
+    
 
+    val amoNibble = op(LSU_A_LS_BIT - 1, 0)
+    val (amoVal, amoOk) = amoOp.safe(amoNibble)
+    if (EnableAtomic) {
+      req_q.atomic.isAmo := is_amo
+      req_q.atomic.isLR  := is_lr
+      req_q.atomic.isSC  := is_sc
+      req_q.atomic.amoCode := amoVal
+    } else {
+      req_q.atomic := 0.U.asTypeOf(new AtomicInfo())
+    }
+    
     mem_unaligned_e1_q := Mux1H(
       Seq(
-        (op(2, 1) === 3.U) -> addr(1),
-        (op(2, 1) === 2.U) -> addr(0)
+        (op(2, 1) === 3.U | (is_ato))  -> (addr(1) | addr(0)),
+        (op(2, 1) === 2.U & (!is_ato)) -> addr(0)
       )
     )
 
@@ -100,7 +123,7 @@ class CL3LSU extends Module with LSUConstant {
   io.out.mem.bits      := req_q
   io.out.mem.bits.mask := Mux(req_q.wen, req_q.mask, 0.U)
 
-  val is_word_mask = req_q.mask === MASK_ALL
+  val is_word_mask = (req_q.mask === MASK_ALL) | (op_q(LSU_A_LS_BIT) & atoOn)
   val is_half_mask = (req_q.mask === MASK_HI) || (req_q.mask === MASK_LO)
   val is_byte_mask = req_q.mask.orR && !is_half_mask && !is_word_mask
 
@@ -124,7 +147,7 @@ class CL3LSU extends Module with LSUConstant {
 
   class ReqRecord extends Bundle {
     val mask      = UInt(4.W)
-    val op        = UInt(4.W)
+    val op        = UInt(5.W)
     val cacheable = Bool()
     val addr      = UInt(32.W)
     val pc        = UInt(32.W)
@@ -150,7 +173,7 @@ class CL3LSU extends Module with LSUConstant {
   val lh_data = Mux(req_record_q.mask(1, 0).andR, io.in.mem.bits.rdata(15, 0), io.in.mem.bits.rdata(31, 16))
   val lw_data = io.in.mem.bits.rdata
 
-  val wb_data = MuxLookup(req_record_q.op(2, 0), io.in.mem.bits.rdata)(
+  val wb_data_load = MuxLookup(req_record_q.op(2, 0), io.in.mem.bits.rdata)(
     Seq(
       "b010".U -> SignExt(lb_data, 32),
       "b011".U -> ZeroExt(lb_data, 32),
@@ -158,6 +181,7 @@ class CL3LSU extends Module with LSUConstant {
       "b101".U -> ZeroExt(lh_data, 32)
     )
   )
+  val wb_data = Mux(req_record_q.op(4) && atoOn, io.in.mem.bits.rdata, wb_data_load)
   io.out.info.rdata := Mux(mem_unaligned_e2_q, req_q.addr, wb_data)
 
   io.out.info.valid := (io.in.mem.valid && outstanding_q) | mem_unaligned_e2_q
@@ -200,6 +224,18 @@ object LSUOPField extends DecodeField[InstructionPattern, UInt] {
       case "sw"  => BitPat(LSU_SW)
       case "sh"  => BitPat(LSU_SH)
       case "sb"  => BitPat(LSU_SB)
+
+      case "lr"      => BitPat(ATO_LR)
+      case "sc"      => BitPat(ATO_SC)
+      case "amoswap" => BitPat(ATO_SWAP)
+      case "amoadd"  => BitPat(ATO_ADD)
+      case "amoxor"  => BitPat(ATO_XOR)
+      case "amoand"  => BitPat(ATO_AND)
+      case "amoor"   => BitPat(ATO_OR)
+      case "amomin"  => BitPat(ATO_MIN)
+      case "amomax"  => BitPat(ATO_MAX)
+      case "amominu" => BitPat(ATO_MINU)
+      case "amomaxu" => BitPat(ATO_MAXU)
       case _     => BitPat.dontCare(LSU_WIDTH)
     }
   }

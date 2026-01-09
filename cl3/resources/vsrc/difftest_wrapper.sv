@@ -16,6 +16,8 @@ module difftest_wrapper (
   input logic        diff_info_0_csr_wen,
   input logic [31:0] diff_info_0_csr_wdata,
   input logic [11:0] diff_info_0_csr_waddr,
+  input logic        diff_info_0_irq_en,
+
 
   // Inputs for the second core/pipeline to be compared
   input logic [31:0] diff_info_1_pc,
@@ -28,7 +30,8 @@ module difftest_wrapper (
   input logic        diff_info_1_skip,
   input logic        diff_info_1_csr_wen,
   input logic [31:0] diff_info_1_csr_wdata,
-  input logic [11:0] diff_info_1_csr_waddr
+  input logic [11:0] diff_info_1_csr_waddr,
+  input logic        diff_info_1_irq_en
 
 );
 
@@ -46,6 +49,7 @@ module difftest_wrapper (
   assign diff_packed[0].csr_wen   = diff_info_0_csr_wen;
   assign diff_packed[0].csr_wdata = diff_info_0_csr_wdata;
   assign diff_packed[0].csr_waddr = diff_info_0_csr_waddr;
+  assign diff_packed[0].irq_en    = diff_info_0_irq_en;
 
   
   // --- Assignments for the second set of inputs (index 1) ---
@@ -60,6 +64,7 @@ module difftest_wrapper (
   assign diff_packed[1].csr_wen   = diff_info_1_csr_wen;
   assign diff_packed[1].csr_wdata = diff_info_1_csr_wdata;
   assign diff_packed[1].csr_waddr = diff_info_1_csr_waddr;
+  assign diff_packed[1].irq_en    = diff_info_1_irq_en;
 
   // Difftest module instantiation
   Difftest difftest_inst (

@@ -112,6 +112,7 @@ class DEInfo extends Bundle {
   val isCSR       = Bool()
   val isEXU       = Bool()
   val isBr        = Bool()
+  val isATO       = Bool()
   val uop         = new MicroOp
   val illegal     = Bool()
   val pred        = Bool()
@@ -125,6 +126,7 @@ class DEInfo extends Bundle {
   def inst_delay: UInt = {
     Mux1H(
       Seq(
+        // isATO -> 2.U(2.W),
         isLSU -> 1.U(2.W),
         isMUL -> 1.U(2.W),
         isDIV -> 2.U(2.W),
@@ -240,7 +242,7 @@ class PipeInfo extends Bundle {
   def isALU:  Bool = valid && info.isEXU && !info.isBr
   def isMem:  Bool = isLd || isSt
   def isTrap: Bool = valid && except.valid
-
+  def isIrq : Bool = valid && ((except.code(5, 4) === 2.U) && except.valid)
   def rdIdx: UInt = info.inst(11, 7)
 }
 

@@ -11,7 +11,7 @@ class CacheSubSystem(
   val io = IO(new Bundle {
     val dc_cpu = new CpuMemPort(dp)
     val ic_cpu = new ICacheCpuIO(ip)
-    val amo    = new AmoBundle()
+    val atomic    = Input(new AtomicInfo())
     val mem    = Flipped(new Axi4SlaveIO(p))
   })
 
@@ -21,7 +21,7 @@ class CacheSubSystem(
 
   u_icache.io.cpu <> io.ic_cpu
   u_dcache.io.cpu <> io.dc_cpu
-  u_dcache.io.amo <> io.amo
+  u_dcache.io.atomic <> io.atomic
 
   u_arbiter.io.icache_axi <> u_icache.io.axi
   u_arbiter.io.dcache_axi <> u_dcache.io.axi

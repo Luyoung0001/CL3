@@ -7,6 +7,10 @@
 #include <dlfcn.h>
 #include <svdpi.h>
 
+#include <pthread.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -219,6 +223,51 @@ int difftest_step(int n, svOpenArrayHandle info) {
 
   return 0;
 }
+
+static int is_eofd;
+
+static int ReadKBByte()
+{
+	if( is_eofd ) return 0xffffffff;
+	char rxchar = 0;
+	int rread = read(fileno(stdin), (char*)&rxchar, 1);
+
+	if( rread > 0 ) // Tricky: getchar can't be used with arrow keys.
+		return rxchar;
+	else
+		return -1;
+}
+
+static int IsKBHit()
+{
+	if( is_eofd ) return -1;
+	int byteswaiting;
+	ioctl(0, FIONREAD, &byteswaiting);
+	if( !byteswaiting && write( fileno(stdin), 0, 0 ) != 0 ) { is_eofd = 1; return -1; } // Is end-of-file for 
+	return !!byteswaiting;
+}
+
+uint32_t uart_read(uint32_t raddr, unsigned char valid){
+  if(valid){
+    if( raddr == 0x10000004 )
+      return (0x60 | IsKBHit()) << 8;
+    else if( raddr == 0x10000000 && IsKBHit() )
+      return ReadKBByte();
+  }
+  return 0;
+}
+
+void uart_write(uint32_t waddr, unsigned char valid, uint32_t wdata){
+  if(valid){
+    if( waddr == 0x10000000 ) //UART 8250 / 16550 Data Buffer
+    {
+      printf( "%c", wdata );
+      fflush( stdout );
+    }
+  }
+  return;
+}
+
 
 #ifdef __cplusplus
 }

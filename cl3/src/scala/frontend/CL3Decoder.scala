@@ -221,7 +221,18 @@ object BRField extends BoolDecodeField[InstructionPattern] {
   }
 }
 
-class CL3Decoder extends Module {
+object ATOField extends BoolDecodeField[InstructionPattern] {
+  def name: String = "Atomic instruction"
+
+  def genTable(op: InstructionPattern): BitPat = {
+    op.opType match {
+      case "ATO" => BitPat(true.B)
+      case _     => BitPat(false.B)
+    }
+  }
+}
+
+class CL3Decoder extends Module with CL3Config {
 
   val io = IO(new Bundle {
     val inst        = Input(UInt(32.W))
@@ -233,6 +244,7 @@ class CL3Decoder extends Module {
   })
 
   import CL3InstInfo._
+  val atoOn: Bool = if (EnableAtomic) true.B else false.B
 
   val decodeTable  = new DecodeTable(instPatterns, allFields)
   val decodeResult = decodeTable.decode(io.inst)
@@ -243,11 +255,13 @@ class CL3Decoder extends Module {
   io.out.illegal := decodeResult(IllegalField)
   io.out.wen     := decodeResult(WENField)
   io.out.isEXU   := decodeResult(EXUField)
-  io.out.isLSU   := decodeResult(LSUField)
+  io.out.isLSU   := decodeResult(LSUField) | (decodeResult(ATOField) & atoOn)
   io.out.isMUL   := decodeResult(MULField)
   io.out.isDIV   := decodeResult(DIVField)
   io.out.isCSR   := decodeResult(CSRField)
   io.out.isBr    := decodeResult(BRField)
+  io.out.isATO   := decodeResult(ATOField) & atoOn
+  dontTouch(io.out)
 
   io.out.inst := io.inst
 

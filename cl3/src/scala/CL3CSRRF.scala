@@ -57,6 +57,7 @@ class CL3CSRRF() extends Module with CSRConstant {
 
   val csr_mepc_q     = RegInit(0.U(32.W))
   val csr_sr_q       = RegInit("h1800".U(32.W))
+  // val csr_sr_q       = RegInit(0.U(32.W))
   val csr_mcause_q   = RegInit(0.U(32.W))
   val csr_mtvec_q    = RegInit(0.U(32.W))
   val csr_mip_q      = RegInit(0.U(32.W))
@@ -94,7 +95,7 @@ class CL3CSRRF() extends Module with CSRConstant {
   )
 
   val cpu_id_i = 0.U(32.W)           // TODO: get from outside
-  val misa_i   = "h40001100".U(32.W) // TODO: get from outside
+  val misa_i   = "h40401101".U(32.W) // TODO: get from outside
 
   val csr_readonly_table = Seq(
     CSR_MHARTID -> cpu_id_i,
@@ -149,7 +150,7 @@ class CL3CSRRF() extends Module with CSRConstant {
     csr_sr_q    := Cat(
       csr_sr_q(31, 13),
       // SR_MPP_U, // Set next MPP to user mode
-      csr_sr_q(12, 11), // Keep MPP bits
+      SR_MPP_U, // Keep MPP bits
       csr_sr_q(10, 8),
       1.U(1.W),         // Set MPIE to 1
       csr_sr_q(6, 4),
@@ -161,7 +162,7 @@ class CL3CSRRF() extends Module with CSRConstant {
       csr_sr_q(31, 13),
       csr_mpriv_q, // Save Interrupts / machine mode
       csr_sr_q(10, 8),
-      csr_sr_q(1),
+      csr_sr_q(SR_MIE_R),
       csr_sr_q(6, 4),
       0.U(1.W),    // Disable interrupts and enter machine mode
       csr_sr_q(2, 0)

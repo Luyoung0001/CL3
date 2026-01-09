@@ -22,7 +22,7 @@ class DCache(p: DCacheParams) extends Module {
 
   u_core.io.pmem <> u_pmem_mux.io.in1port
   u_core.io.cpu <> u_mux.io.backs.cached
-  u_core.io.amo <> io.amo
+  u_core.io.atomic <> io.atomic
 
   io.axi <> u_axi.io.axi
 
