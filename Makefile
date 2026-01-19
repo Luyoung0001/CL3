@@ -4,6 +4,7 @@ MKDIR     := mkdir -p
 RM        := rm -rf
 MAKE      ?= make
 VCC       ?= verilator
+# VCC       ?= vcs
 WAVE      ?= gtkwave
 
 # Project Configuration
@@ -13,7 +14,18 @@ BUILD_DIR := ./build/$(VCC)
 VSRC_DIR  := ./vsrc
 WAVE_DIR  := ./wave
 CPUTOP    := CL3Top
-DUMP_WAVE ?= 1
+DUMP_WAVE ?=
+LIGHTSSS  ?= 1
+
+DUMP_START ?= 37000000
+DUMP_STOP  ?= 38000000
+LIGHTSSS_INTERVAL ?= 100000
+
+ifneq ($(strip $(DUMP_WAVE)),)
+  ifneq ($(strip $(LIGHTSSS)),)
+    $(error DUMP_WAVE and LIGHTSSS are mutually exclusive. Please enable only one.)
+  endif
+endif
 
 RTLSRC_CPU  		:= $(VSRC_DIR)/$(CPUTOP).sv
 
@@ -25,6 +37,7 @@ verilog:
 	$(MILL) -i $(PRJ).runMain Elaborate --target-dir $(VSRC_DIR)
 	sed -i '/difftest.*\.sv/d' $(VSRC_DIR)/$(CPUTOP).sv
 	sed -i '/mem_helper\.sv/d' $(VSRC_DIR)/$(CPUTOP).sv
+	sed -i '/firrtl_black_box_resource_files.f/, $$d' $(VSRC_DIR)/$(CPUTOP).sv
 	
 # Show Help for Elaborate
 help:
@@ -47,6 +60,9 @@ clean:
 	$(RM) ./build
 	$(RM) $(VSRC_DIR)
 
+test:
+	$(MILL) -i $(PRJ).test
+
 .PHONY: $(RTLSRC_CPU)
 
 -include ./soc/soc.mk
@@ -57,27 +73,40 @@ BIN := $(BUILD_DIR)/$(VTOP)
 
 # TODO: use systemverilog top 
 # TODO: add iverilog support
+# 	-CFLAGS -g \
+
 ifeq ($(VCC), verilator)
 	VF := $(addprefix +incdir+, $(RTLSRC_INCDIR)) \
 	--Wno-lint --Wno-UNOPTFLAT --Wno-BLKANDNBLK --Wno-COMBDLY --Wno-MODDUP \
 	./cl3/src/cc/verilator/main.cpp \
 	./cl3/src/cc/verilator/difftest.cpp \
-	-CFLAGS -I$(abspath ./cl3/src/cc/verilator/include) \
-	-CFLAGS -g \
+	./cl3/src/cc/verilator/verilated_hooks.cpp \
+	./cl3/src/cc/verilator/lightsss.cpp \
+	./cl3/src/cc/perf.cpp \
+	-CFLAGS "-I$(abspath ./cl3/src/cc/verilator/include) -DVL_USER_FATAL" -DUSE_VERILATOR \
 	--timescale 1ns/1ps \
 	--autoflush \
 	--trace --trace-fst \
-	--build -j 0 --exe --timing --cc \
+	--build -j 2 --exe --timing --cc \
 	--Mdir $(BUILD_DIR) \
 	--top-module $(VTOP) -o $(VTOP)
 else ifeq ($(VCC), vcs)
 	VF := $(addprefix +incdir+, $(RTLSRC_INCDIR)) \
 	+vc -full64 -sverilog +v2k -timescale=1ns/1ps \
+	+lint=TFIPC-L +notimingcheck \
+	-lca -kdb 	-debug_access \
+	-P ${VERDI_HOME}/share/PLI/VCS/LINUX64/novas.tab \
+     ${VERDI_HOME}/share/PLI/VCS/LINUX64/pli.a \
+	./cl3/src/cc/vcs/difftest.cpp \
+	./cl3/src/cc/perf.cpp \
+	-CFLAGS "-fPIC -std=gnu++0x \
+	-I$(abspath ./cl3/src/cc/vcs/include) \
+	$(if $(VCS_HOME),-I$(VCS_HOME)/include,)"  \
+	-CXXFLAGS "-fPIC -std=gnu++0x \
+    -I$(abspath ./cl3/src/cc/vcs/include) \
+    $(if $(VCS_HOME),-I$(VCS_HOME)/include,)" \
 	-LDFLAGS -Wl,--no-as-needed \
-	+lint=TFIPC-L \
-	-lca -kdb \
-	-CC "$(if $(VCS_HOME), -I$(VCS_HOME)//include,)" \
-	-debug_access -l $(COMPILE_OUT) \
+	-l $(COMPILE_OUT) \
 	-Mdir=$(BUILD_DIR) \
 	-top $(VTOP) -o $(BUILD_DIR)/$(VTOP)
 else 
@@ -93,12 +122,43 @@ $(BIN): $(RTLSRC_CPU) $(RTLSRC_PERIP) $(RTLSRC_INTERCON) $(RTLSRC_TOP)
 
 bin: $(BIN)
 
-REF ?= ./utils/riscv32-spike-so
-WAVE_TYPE ?= fst
+REF ?= ./utils/-spike-so
+WAVE_TYPE := $(if $(filter $(VCC),vcs),fsdb,fst)
+
+RESET_VECTOR := 0x80000000
+SRAM_MSIZE   := 0x01000000
+RAM_END      := 0x81000000
+DTB          := utils/dts/cl3.dtb
+DTB_LEN  := $(shell stat -c%s $(DTB))
+DTB_ADDR := $(shell python3 -c 'ram_end=int("$(RAM_END)",16); dtb_len=int("$(DTB_LEN)"); addr=(ram_end-dtb_len)&~0xF; print("0x%08x"%addr)')
 
 RUN_ARGS += --diff
 RUN_ARGS += --ref=$(REF)
+
+ifneq ($(strip $(LIGHTSSS)),)
+RUN_ARGS += --lightsss
+RUN_ARGS += --fork-interval=$(LIGHTSSS_INTERVAL)
+else ifneq ($(strip $(DUMP_WAVE)),)
+RUN_ARGS += +dump_start=$(DUMP_START)
+RUN_ARGS += +dump_stop=$(DUMP_STOP)
+endif
+
 RUN_ARGS += --image=$(IMAGE).bin
+RUN_ARGS += +firmware=$(IMAGE).mem
+RUN_ARGS += +dtb_addr=$(DTB_ADDR)
+RUN_ARGS += +dtbmem=./utils/dts/cl3Dtb.mem
+
+# RUN_ARGS += --image=./utils/bin/Image
+# RUN_ARGS += +firmware=./utils/bin/Image.mem
+# ifeq ($(VCC),vcs)
+# 	RUN_ARGS += +ref=$(REF)
+# 	RUN_ARGS += +image=$(IMAGE).bin
+# else ifeq ($(VCC),verilator)
+# 	RUN_ARGS += --diff
+# 	RUN_ARGS += --ref=$(REF)
+# 	RUN_ARGS += --image=$(IMAGE).bin
+# endif
+
 
 ifneq ($(DUMP_WAVE),)
 RUN_ARGS += +$(WAVE_TYPE)

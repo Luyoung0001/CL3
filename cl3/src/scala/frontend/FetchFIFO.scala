@@ -15,14 +15,14 @@ class FetchFIFO() extends Module with FetchFIFOConfig {
   })
 
   val entry_vec = RegInit(VecInit(Seq.fill(FIFODepth)(0.U.asTypeOf(new FERawInfo))))
-  val rd_ptr_q  = RegInit(0.U(1.W))
-  val wr_ptr_q  = RegInit(0.U(1.W))
-  val count_q   = RegInit(0.U(2.W))
+  val rd_ptr_q  = RegInit(0.U(log2Ceil(FIFODepth).W))
+  val wr_ptr_q  = RegInit(0.U(log2Ceil(FIFODepth).W))
+  val count_q   = RegInit(0.U((log2Ceil(FIFODepth) + 1).W))
 
   val is_full  = (count_q === FIFODepth.U)
   val is_empty = (count_q === 0.U)
 
-  io.in.ready := !is_full && !io.flush
+  io.in.ready := !is_full
 
   val head = entry_vec(rd_ptr_q)
 
@@ -38,10 +38,8 @@ class FetchFIFO() extends Module with FetchFIFOConfig {
     }
 
   }.elsewhen(push) {
-    entry_vec(wr_ptr_q).pc   := io.in.bits.pc
-    entry_vec(wr_ptr_q).inst := io.in.bits.inst
-    entry_vec(wr_ptr_q).pred := io.in.bits.pred
-    wr_ptr_q                 := wr_ptr_q + 1.U
+    entry_vec(wr_ptr_q) := io.in.bits
+    wr_ptr_q            := wr_ptr_q + 1.U
   }
 
   when(io.flush) {
@@ -60,12 +58,16 @@ class FetchFIFO() extends Module with FetchFIFOConfig {
 
   val rd_entry = entry_vec(rd_ptr_q)
 
-  // TODO: We should change PC logic when we support C extension
-  io.out.bits(0).pc    := Cat(rd_entry.pc(31, 3), 0.U(3.W))
-  io.out.bits(0).inst  := rd_entry.inst(31, 0)
-  io.out.bits(0).dummy := false.B
+  io.out.bits(0).pc          := rd_entry.pc
+  io.out.bits(0).inst        := rd_entry.inst(31, 0)
+  io.out.bits(0).pred        := rd_entry.pred(0)
+  io.out.bits(0).fault_fetch := rd_entry.fault_fetch
+  io.out.bits(0).fault_page  := rd_entry.fault_page
 
-  io.out.bits(1).pc    := Cat(rd_entry.pc(31, 3), "b100".U(3.W))
-  io.out.bits(1).inst  := rd_entry.inst(63, 32)
-  io.out.bits(1).dummy := rd_entry.pred(0)
+  io.out.bits(1).pc          := rd_entry.pc + 4.U
+  io.out.bits(1).inst        := rd_entry.inst(63, 32)
+  io.out.bits(1).pred        := rd_entry.pred(1)
+  io.out.bits(1).fault_fetch := rd_entry.fault_fetch
+  io.out.bits(1).fault_page  := rd_entry.fault_page
+
 }

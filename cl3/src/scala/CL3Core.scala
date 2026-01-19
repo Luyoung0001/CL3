@@ -4,8 +4,11 @@ import chisel3._
 import chisel3.util._
 
 class CoreIO extends Bundle {
-  val imem = new CL3ICacheIO
-  val dmem = new CL3DCacheIO
+  val imem      = new CL3ICacheIO
+  val dmem      = new CL3DCacheIO
+  val ext_irq   = Input(Bool())
+  val timer_irq = Input(Bool())
+
 }
 
 class CL3Core extends Module with CL3Config {
@@ -21,9 +24,8 @@ class CL3Core extends Module with CL3Config {
 
   val issue = Module(new CL3Issue)
   issue.io.in.fetch <> frontend.io.out
-  frontend.io.bp  := issue.io.out.bp
-  frontend.io.br  := issue.io.out.br
-  issue.io.in.irq := false.B
+  frontend.io.bp := issue.io.out.bp
+  frontend.io.br := issue.io.out.br
 
   val lsu = Module(new CL3LSU)
   lsu.io.in.mem   := mmu.io.lsuIn.resp
@@ -31,15 +33,24 @@ class CL3Core extends Module with CL3Config {
   mmu.io.lsuIn.resp <> lsu.io.in.mem
   lsu.io.in.info <> issue.io.out.op(2)
   issue.io.in.lsu := lsu.io.out.info
+  lsu.io.in.flush := issue.io.out.lsu_flush
 
   val csr = Module(new CL3CSR)
-  csr.io.in.bootAddr := 0.U
-  csr.io.in.irq      := false.B
   csr.io.in.info     := issue.io.out.op(5)
   csr.io.in.wb       := issue.io.out.csr
-  csr.io.in.bootAddr := BootAddr
+  csr.io.in.baddr    := BOOT_ADDR
   issue.io.in.csr    := csr.io.out.info
-  mmu.io.ctrl        := csr.io.out.mmu
+  csr.io.in.hold     := issue.io.out.hold
+  mmu.io.ctrl        := DontCare //TODO:
+
+  csr.io.in.irq_e     := io.ext_irq // TODO:
+  csr.io.in.irq_t   := io.timer_irq
+  csr.io.in.irq_inhibit := false.B
+  issue.io.in.irq       := csr.io.out.irq
+
+  // for difftest
+  issue.io.in.tvec := csr.io.out.tvec
+  issue.io.in.epc  := csr.io.out.epc
 
   val mul = Module(new CL3MUL)
   mul.io.in.hold         := issue.io.out.hold
@@ -59,5 +70,15 @@ class CL3Core extends Module with CL3Config {
   exec1.io.in.hold    := issue.io.out.hold
   exec1.io.in.info    := issue.io.out.op(1)
   issue.io.in.exec(1) := exec1.io.out.info
+
+  val exec2 = Module(new CL3EXU)
+  exec2.io.in.hold    := issue.io.out.hold // TODO
+  exec2.io.in.info    := issue.io.out.op(6)
+  issue.io.in.exec(2) := exec2.io.out.info
+
+  val exec3 = Module(new CL3EXU)
+  exec3.io.in.hold    := issue.io.out.hold // TODO
+  exec3.io.in.info    := issue.io.out.op(7)
+  issue.io.in.exec(3) := exec3.io.out.info
 
 }

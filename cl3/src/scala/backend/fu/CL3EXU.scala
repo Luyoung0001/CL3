@@ -11,7 +11,7 @@ class EXUInput extends Bundle {
 }
 
 class EXUOutput extends Bundle {
-  val info   = Flipped(new ISEXUInput)
+  val info = Flipped(new ISEXUInput)
 }
 
 class EXUIO  extends Bundle                 {
@@ -28,7 +28,7 @@ class CL3EXU extends Module with OpConstant {
   val Bimm = SignExt(Cat(inst(31), inst(7), inst(30, 25), inst(11, 8), 0.U(1.W)), 32)
   val Jimm = SignExt(Cat(inst(31), inst(19, 12), inst(20), inst(30, 25), inst(24, 21), 0.U(1.W)), 32)
 
-  val alu_input_a = MuxLookup(io.in.info.uop.op1, io.in.info.ra)(
+  val alu_input_a = MuxLookup(io.in.info.uop.op1, io.in.info.rs1)(
     Seq(
       OP1_PC -> io.in.info.pc,
       OP1_Z  -> 0.U
@@ -41,7 +41,7 @@ class CL3EXU extends Module with OpConstant {
       OP2_IMMI -> Iimm,
       OP2_IMMB -> Bimm,
       OP2_IMMJ -> Jimm,
-      OP2_REG  -> io.in.info.rb
+      OP2_REG  -> io.in.info.rs2
     )
   )
 
@@ -67,13 +67,13 @@ class CL3EXU extends Module with OpConstant {
   )
 
   val br_target  = io.in.info.pc + Bimm
-  val jmp_target = alu.io.res
+  val jmp_target = alu.io.res(31, 1) ## 0.U(1.W) // TODO: unaligned exception
 
   io.out.info.br.valid := io.in.info.valid && taken
   io.out.info.br.pc    := Mux(isJal || isJalr, jmp_target, br_target)
   io.out.info.br.priv  := 0.U
 
-  val is_ret  = isJalr && io.in.info.raIdx === 1.U && !Iimm.andR
+  val is_ret  = isJalr && io.in.info.rs1Idx === 1.U && !Iimm.andR
   val is_call = isJal && io.in.info.rdIdx === 1.U ||
     isJalr && io.in.info.rdIdx === 1.U && !is_ret
 

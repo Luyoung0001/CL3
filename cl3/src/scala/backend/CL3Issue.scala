@@ -7,19 +7,60 @@ class CL3IssueIO extends Bundle {
   val in = new Bundle {
     val fetch = Vec(2, Flipped(Decoupled(Input(new DEInfo))))
     val csr   = new ISCSRInput
-    val exec  = Vec(2, new ISEXUInput)
+    val exec  = Vec(4, new ISEXUInput)
     val mul   = new PipeMULInput // TODO: maybe we can use BoringUtil here
     val div   = new PipeDIVInput
     val lsu   = new PipeLSUInput
     val irq   = Input(Bool())
+
+    /*  Used for difftest to verify the Next PC (NPC). When an exception occurs,
+    the NPC matches the tvec register. This signal is required for that
+    comparison and will be optimized away when difftest is disabled. */
+    val tvec = Input(UInt(32.W))
+    val epc  = Input(UInt(32.W))
   }
 
   val out = new Bundle {
-    val br          = Output(new BrInfo)
-    val bp          = Output(new BpInfo)
-    val op          = Vec(6, Output(new OpInfo))
-    val csr         = new ISCSROutput
-    val hold        = Output(Bool())
+    val br        = Output(new BrInfo)
+    val bp        = Output(new BpInfo)
+    val op        = Vec(8, Output(new OpInfo))
+    val csr       = new ISCSROutput
+    val hold      = Output(Bool())
+    val lsu_flush = Output(Bool())
+
+    val debug = new Bundle {
+      val fetch0_ok                 = Output(Bool())
+      val fetch1_ok                 = Output(Bool())
+      val slot0_data_check          = Output(Bool())
+      val slot1_data_check          = Output(Bool())
+      val slot0_struct_check        = Output(Bool())
+      val slot1_struct_check        = Output(Bool())
+      val slot0_order_check         = Output(Bool())
+      val slot1_order_check         = Output(Bool())
+      val slot1_type_check          = Output(Bool())
+      val slot1_data_check_internal = Output(Bool())
+      val delay0                    = Output(UInt(2.W))
+      val id0                       = Output(UInt(3.W))
+      val inst_delay0               = Output(UInt(2.W))
+      val delay1                    = Output(UInt(2.W))
+      val id1                       = Output(UInt(3.W))
+      val inst_delay1               = Output(UInt(2.W))
+
+      val slot0_rdIdx  = Output(UInt(5.W))
+      val slot1_rs1Idx = Output(UInt(5.W))
+      val slot1_rs2Idx = Output(UInt(5.W))
+
+      val mismatch0    = Output(Bool())
+      val mismatch1    = Output(Bool())
+      val dual_issue   = Output(Bool())
+      val single_issue = Output(Bool())
+
+      val pipe1mem = Output(Bool())
+      val rdystage = Output(Bool())
+
+      val mispred = Output(UInt(32.W))
+      val brj_num = Output(UInt(32.W))
+    }
   }
 }
 
@@ -30,219 +71,276 @@ class CL3Issue extends Module with CL3Config {
   val fetch1 = io.in.fetch(1)
 
   val pc_q   = RegInit(0.U(32.W))
-  val priv_q = RegInit("b11".U(2.W))
+  val priv_q = RegEnable("b11".U(2.W), io.in.csr.br.valid)
 
   val single_issue = Wire(Bool())
   val dual_issue   = Wire(Bool())
-  val flush        = Wire(Bool())
   val stall        = Wire(Bool())
 
-// Pay attention to the branch priority
-  when(io.in.csr.br.valid) {
-    pc_q   := io.in.csr.br.pc
-    priv_q := io.in.csr.br.priv
-  }.elsewhen(io.in.exec(1).br.valid) {
-    pc_q := io.in.exec(1).br.pc
-  }.elsewhen(io.in.exec(0).br.valid) {
-    pc_q := io.in.exec(0).br.pc
-  }.elsewhen(dual_issue) {
-    pc_q := pc_q + 8.U
-  }.elsewhen(single_issue) {
-    pc_q := pc_q + 4.U
-  }
+  val fetch0_ok = fetch0.valid && !io.out.br.valid
+  val fetch1_ok = fetch1.valid && fetch0_ok
 
-  dontTouch(io)
+  val slot        = Wire(Vec(2, Valid(new DEInfo)))
+  val csr_pending = Wire(Bool())
 
-  val fetch0_pc_match = fetch0.bits.pc(31, 1) === (pc_q(31, 1))
-  val fetch1_pc_match = fetch1.bits.pc(31, 1) === (pc_q(31, 1))
-
-  val fetch0_ok = fetch0.valid && fetch0_pc_match && !(flush || io.in.csr.br.valid)
-  val fetch1_ok = fetch1.valid && (fetch1_pc_match || fetch0_pc_match) && !(flush || io.in.csr.br.valid)
-
-  val mispred = (fetch0.valid || fetch1.valid) && !(fetch0_ok || fetch1_ok)
-
-  val slot = Wire(Vec(2, Valid(new DEInfo)))
-
-  slot(0).bits  := Mux(fetch0_ok, fetch0.bits, fetch1.bits)
-  slot(0).valid := Mux(fetch0_ok, true.B, Mux(fetch1_ok, true.B, false.B))
-
+  slot(0).bits  := fetch0.bits
+  slot(0).valid := fetch0_ok
   slot(1).bits  := fetch1.bits
-  slot(1).valid := Mux(fetch0_ok, fetch1_ok, false.B)
+  slot(1).valid := fetch1_ok
 
-  val pipe0 = Module(new CL3Pipe())
-  val pipe1 = Module(new CL3Pipe())
+  val pipes  = Seq(Module(new CL3Pipe(0)), Module(new CL3Pipe(1)))
+  val rf     = Module(new CL3RF())
+  val bypass = Module(new BypassNetwork)
 
-  stall := pipe0.io.out.stall || pipe1.io.out.stall
-  flush := pipe0.io.out.flush || pipe1.io.out.flush
+  stall := pipes.map(_.io.out.e1.stall).reduce(_ || _)
+  // flush       := pipes.map(_.io.out.wb_flush).reduce(_ || _)
+
+  val e1_trap = pipes.map(_.io.out.e1.isTrap).reduce(_ || _)
+  val e2_trap = pipes.map(_.io.out.e2.isTrap).reduce(_ || _)
+  val wb_trap = pipes.map(_.io.out.wb.isTrap).reduce(_ || _)
 
   io.out.hold := stall
 
-  // TODO: This manual wiring for each pipeline is verbose and error-prone.
-  //       It should be refactored for better scalability and maintainability.
-  pipe0.io.in.stall        := stall
-  pipe0.io.in.flush        := pipe1.io.out.flush
-  pipe0.io.in.flushWB      := false.B // TODO:
-  pipe0.io.in.irq          := io.in.irq
-  pipe0.io.in.exu.br       := io.in.exec(0).br
-  pipe0.io.in.exu.result   := io.in.exec(0).result
-  pipe0.io.in.csr          := io.in.csr
-  pipe0.io.in.lsu          := io.in.lsu
-  pipe0.io.in.mul          := io.in.mul
-  pipe0.io.in.div          := io.in.div
-  pipe0.io.in.issue.info   := slot(0).bits
-  pipe0.io.in.issue.except := 0.U     // TODO:
-
-  pipe1.io.in.stall        := stall
-  pipe1.io.in.flush        := pipe0.io.out.flush
-  pipe1.io.in.flushWB      := pipe0.io.out.flush
-  pipe1.io.in.irq          := io.in.irq
-  pipe1.io.in.exu.br       := io.in.exec(1).br
-  pipe1.io.in.exu.result   := io.in.exec(1).result
-  pipe1.io.in.csr          := io.in.csr
-  pipe1.io.in.lsu          := io.in.lsu
-  pipe1.io.in.mul          := io.in.mul
-  pipe1.io.in.div          := io.in.div
-  pipe1.io.in.issue.info   := slot(1).bits
-  pipe1.io.in.issue.except := 0.U // TODO:
-
-  val rf = Module(new CL3RF())
-
-  val bypass = Module(new BypassNetwork)
-
-  bypass.io.in.issue(0).raIdx := slot(0).bits.raIdx
-  bypass.io.in.issue(0).ra    := rf.io.rd(0).rdata
-
-  bypass.io.in.issue(0).rbIdx := slot(0).bits.rbIdx
-  bypass.io.in.issue(0).rb    := rf.io.rd(1).rdata
-
-  bypass.io.in.issue(1).raIdx := slot(1).bits.raIdx
-  bypass.io.in.issue(1).ra    := rf.io.rd(2).rdata
-
-  bypass.io.in.issue(1).rbIdx := slot(1).bits.rbIdx
-  bypass.io.in.issue(1).rb    := rf.io.rd(3).rdata
-
-  bypass.io.in.pipe(0) := pipe0.io.out
-  bypass.io.in.pipe(1) := pipe1.io.out
-
-  rf.io.rd(0).raddr := slot(0).bits.raIdx
-  rf.io.rd(1).raddr := slot(0).bits.rbIdx
-
-  rf.io.rd(2).raddr := slot(1).bits.raIdx
-  rf.io.rd(3).raddr := slot(1).bits.rbIdx
-
   val slot_op = Wire(Vec(2, new OpInfo))
 
-  slot_op(0)       := OpInfo.fromDE(slot(0).bits)
-  slot_op(0).valid := slot(0).valid
-  slot_op(0).ra    := bypass.io.out.ra0
-  slot_op(0).rb    := bypass.io.out.rb0
+  val op_a_fault_r   = Cat(fetch0.bits.fault_page, fetch0.bits.fault_fetch)
+  val op_b_fault_r   = Cat(fetch1.bits.fault_page, fetch1.bits.fault_fetch)
+  val issue0_fault_w = Mux(
+    op_a_fault_r(0),
+    "h11".U(6.W), // EXCEPTION_FAULT_FETCH
+    Mux(
+      op_a_fault_r(1),
+      "h1c".U(6.W), // EXCEPTION_PAGE_FAULT_INST
+      Mux(fetch0.bits.illegal, "h12".U(6.W), 0.U(6.W))
+    )
+  )
+  val issue1_fault_w = Mux(
+    op_b_fault_r(0),
+    "h11".U(6.W), // EXCEPTION_FAULT_FETCH
+    Mux(
+      op_b_fault_r(1),
+      "h1c".U(6.W), // EXCEPTION_PAGE_FAULT_INST
+      Mux(fetch1.bits.illegal, "h12".U(6.W), 0.U(6.W))
+    )
+  )
 
-  pipe0.io.in.issue.ra := slot_op(0).ra
-  pipe0.io.in.issue.rb := slot_op(0).rb
+  val issue0_tval = Mux(op_a_fault_r(0) || op_a_fault_r(1), fetch0.bits.pc, fetch0.bits.inst)
+  val issue1_tval = Mux(op_b_fault_r(0) || op_b_fault_r(1), fetch1.bits.pc, fetch1.bits.inst)
 
-  slot_op(1)       := OpInfo.fromDE(slot(1).bits)
-  slot_op(1).valid := slot(1).valid
-  slot_op(1).ra    := bypass.io.out.ra1
-  slot_op(1).rb    := bypass.io.out.rb1
+  val issue_fault = Seq(issue0_fault_w, issue1_fault_w)
+  val issue_tval  = Seq(issue0_tval, issue1_tval)
 
-  pipe1.io.in.issue.ra := slot_op(1).ra
-  pipe1.io.in.issue.rb := slot_op(1).rb
+  for (i <- 0 until 2) {
+    pipes(i).io.in.irq := io.in.irq
+    pipes(i).io.in.lsu := io.in.lsu
+    pipes(i).io.in.mul := io.in.mul
+    pipes(i).io.in.div := io.in.div
+
+    for (j <- 0 until 2) {
+      pipes(i).io.in.exu(j).br     := io.in.exec(j * 2 + i).br
+      pipes(i).io.in.exu(j).result := io.in.exec(j * 2 + i).result
+    }
+    pipes(i).io.in.issue.info := slot(i).bits
+    pipes(i).io.in.issue.except := ExceptionInfo.apply(issue_fault(i), slot(i).bits.pc, issue_tval(i))
+
+    val rfRdA = i * 2
+    val rfRdB = i * 2 + 1
+
+    bypass.io.in.issue(i).rs1Idx := slot(i).bits.rs1Idx
+    bypass.io.in.issue(i).rs1    := rf.io.rd(rfRdA).rdata
+    bypass.io.in.issue(i).rs2Idx := slot(i).bits.rs2Idx
+    bypass.io.in.issue(i).rs2    := rf.io.rd(rfRdB).rdata
+
+    bypass.io.in.pipe(i) := pipes(i).io.out
+
+    rf.io.rd(rfRdA).raddr := slot(i).bits.rs1Idx
+    rf.io.rd(rfRdB).raddr := slot(i).bits.rs2Idx
+
+    slot_op(i)       := OpInfo.fromDE(slot(i).bits)
+    slot_op(i).valid := slot(i).valid
+    slot_op(i).rs1   := bypass.io.out.issue(i).rs1
+    slot_op(i).rs2   := bypass.io.out.issue(i).rs2
+
+    pipes(i).io.in.issue.rs1 := slot_op(i).rs1
+    pipes(i).io.in.issue.rs2 := slot_op(i).rs2
+
+    pipes(i).io.in.csr := io.in.csr
+
+    // for difftest
+    pipes(i).io.in.tvec := io.in.tvec
+    pipes(i).io.in.epc  := io.in.epc
+  }
+
+  val slot1_mismatch = Wire(Bool())
+  val slot0_is_trap  = Wire(Bool())
+
+  pipes(0).io.in.e1_flush := io.in.csr.br.valid
+  pipes(1).io.in.e1_flush := slot1_mismatch || slot0_is_trap || io.in.csr.br.valid
+
+  pipes(0).io.in.e2_flush := io.in.csr.br.valid
+  pipes(1).io.in.e2_flush := io.in.csr.br.valid
+
+  pipes(0).io.in.wb_flush := io.in.csr.br.valid
+  pipes(1).io.in.wb_flush := io.in.csr.br.valid || pipes(0).io.out.wb.except.valid
+
+  pipes(0).io.in.pipe := pipes(1).io.out
+  pipes(1).io.in.pipe := pipes(0).io.out
+
+  val byp_res = bypass.io.out.issue
+  pipes(0).io.in.issue.rs1_id := byp_res(0).rs1_id
+  pipes(0).io.in.issue.rs2_id := byp_res(0).rs2_id
+
+  val rs1_dep_internal  = (slot_op(0).rdIdx === slot_op(1).rs1Idx) && slot_op(0).wen && slot_op(0).rdIdx.orR // TODO:
+  val rs2_dep_internal  = (slot_op(0).rdIdx === slot_op(1).rs2Idx) && slot_op(0).wen && slot_op(0).rdIdx.orR // TODO:
+  val data_dep_internal = rs1_dep_internal || rs2_dep_internal
+
+  io.out.debug.slot0_rdIdx  := slot_op(0).rdIdx
+  io.out.debug.slot1_rs1Idx := slot_op(1).rs1Idx
+  io.out.debug.slot1_rs2Idx := slot_op(1).rs2Idx
+
+  pipes(1).io.in.issue.rs1_id := Mux(rs1_dep_internal, 1.U, byp_res(1).rs1_id)
+  pipes(1).io.in.issue.rs2_id := Mux(rs2_dep_internal, 1.U, byp_res(1).rs2_id)
 
   val pipe_e1 = Wire(Vec(2, new PipeInfo))
-  pipe_e1(0) := pipe0.io.out.e1
-  pipe_e1(1) := pipe1.io.out.e1
+  pipe_e1(0) := pipes(0).io.out.e1
+  pipe_e1(1) := pipes(1).io.out.e1
+
+  val lsu_delay = pipe_e1(0).isMem && pipe_e1(0).rdy_stage(1) ||
+    pipe_e1(1).isMem && pipe_e1(1).rdy_stage(1)
+
+  val mul_delay = pipe_e1(0).isMul && pipe_e1(0).rdy_stage(1) ||
+    pipe_e1(1).isMul && pipe_e1(1).rdy_stage(1)
 
   val div_pending = Wire(Bool())
 
-  /*---------------- slot 0 issue check ---------------- */
+  val slot0_data_check = Mux1H(
+    Seq(
+      slot(0).bits.isBr  -> byp_res(0).delay.orR,
+      slot(0).bits.isEXU -> byp_res(0).delay(1),
+      slot(0).bits.isCSR -> byp_res(0).delay.orR,
+      slot(0).bits.isDIV -> byp_res(0).delay.orR,
+      slot(0).bits.isMUL -> byp_res(0).delay(1),
+      slot(0).bits.isLSU -> byp_res(0).delay(1)
+    )
+  )
 
-  /* stall the instruction issue if it has a data dependency
-  on a multi-cycle instruction currently in the E1 stage. */
-  val slot0_data_check =
-    pipe_e1(0).hazard_detect(slot_op(0).raIdx) ||
-      pipe_e1(0).hazard_detect(slot_op(0).rbIdx) ||
-      pipe_e1(1).hazard_detect(slot_op(0).raIdx) ||
-      pipe_e1(1).hazard_detect(slot_op(0).rbIdx)
+  val slot0_struct_check = io.in.lsu.stall || div_pending || csr_pending || stall
 
-  val slot0_struct_check =
-    io.in.lsu.stall || div_pending || stall
+  val slot0_order_check = (pipe_e1(0).isMem || pipe_e1(1).isMem) &&
+    (slot(0).bits.isDIV || slot(0).bits.isMUL || slot(0).bits.isCSR)
 
-  val slot0_order_check =
-    (pipe_e1(0).isMem || pipe_e1(1).isMem) &&
-      (slot(0).bits.isDIV || slot(0).bits.isMUL || slot(0).bits.isCSR) &&
-      slot(0).valid
+  val slot0_fire = !(slot0_data_check || slot0_struct_check || slot0_order_check) && slot_op(0).valid
 
-  val slot0_fire = !(slot0_data_check || slot0_struct_check || slot0_order_check || io.in.irq) && slot_op(0).valid
+  val slot1_data_check = Mux1H(
+    Seq(
+      slot(1).bits.isBr  -> byp_res(1).delay.orR,
+      slot(1).bits.isEXU -> byp_res(1).delay(1),
+      slot(1).bits.isCSR -> byp_res(1).delay.orR, // TODO:
+      slot(1).bits.isDIV -> byp_res(1).delay.orR, // TODO:
+      slot(1).bits.isMUL -> byp_res(1).delay(1),
+      slot(1).bits.isLSU -> byp_res(1).delay(1)
+    )
+  )
 
-  /*---------------- slot 1 issue check ---------------- */
-
-  val slot1_data_check =
-    pipe_e1(0).hazard_detect(slot_op(1).raIdx) ||
-      pipe_e1(0).hazard_detect(slot_op(1).rbIdx) ||
-      pipe_e1(1).hazard_detect(slot_op(1).raIdx) ||
-      pipe_e1(1).hazard_detect(slot_op(1).rbIdx) ||
-      slot_op(1).raIdx === slot_op(0).rdIdx && slot_op(0).wen ||
-      slot_op(1).rbIdx === slot_op(0).rdIdx && slot_op(0).wen
+  val slot1_data_check_internal = data_dep_internal &&
+    (pipes(0).io.in.issue.rdy_stage =/= 0.U || slot(1).bits.isBr)
 
   val slot1_struct_check =
-    io.in.lsu.stall || div_pending || stall || !slot0_fire
+    io.in.lsu.stall || div_pending || stall || !slot0_fire || csr_pending
 
-  val slot1_order_check =
+  val slot1_order_check = slot(1).valid &&
     (pipe_e1(0).isMem || pipe_e1(1).isMem) &&
-      (slot(1).bits.isDIV || slot(1).bits.isMUL || slot(1).bits.isCSR) &&
-      slot(1).valid
+    (slot(1).bits.isDIV || slot(1).bits.isMUL || slot(1).bits.isCSR)
 
-  val slot1_type_check =
-    !(slot(1).bits.isEXU && (slot(0).bits.isEXU || slot(0).bits.isLSU || slot(0).bits.isMUL) ||
+  val slot1_type_check = slot(1).valid &&
+    !(slot(1).bits.isEXU && (slot(0).bits.isEXU || slot(0).bits.isLSU || slot(0).bits.isMUL || slot(0).bits.isBr) ||
       slot(1).bits.isBr && (slot(0).bits.isEXU || slot(0).bits.isLSU || slot(0).bits.isMUL) ||
-      slot(1).bits.isLSU && (slot(0).bits.isEXU || slot(0).bits.isMUL) ||
-      slot(0).bits.isMUL && (slot(0).bits.isEXU || slot(0).bits.isLSU))
+      slot(1).bits.isLSU && (slot(0).bits.isEXU || slot(0).bits.isMUL || slot(0).bits.isBr) ||
+      slot(1).bits.isMUL && (slot(0).bits.isEXU || slot(0).bits.isLSU || slot(0).bits.isBr) || !slot(0).valid)
 
-  val slot1_fire =
-    !(slot1_data_check || slot1_struct_check || slot1_type_check || slot1_order_check || io.in.irq) && slot_op(1).valid
+  val slot1_fire = slot_op(1).valid &&
+    !(slot1_data_check_internal || slot1_data_check || slot1_struct_check || slot1_type_check || slot1_order_check)
 
-  pipe0.io.in.issue.fire := slot0_fire
-  pipe1.io.in.issue.fire := slot1_fire
+  // TODO: timing check
+  pipes(0).io.in.issue.rdy_stage := MuxCase(
+    byp_res(0).delay + slot(0).bits.inst_delay,
+    Seq(
+      (lsu_delay && slot(0).bits.isLSU) -> 2.U(2.W),
+      (mul_delay && slot(0).bits.isMUL) -> 2.U(2.W)
+    )
+  )
+  pipes(0).io.in.issue.fire      := slot0_fire
+  pipes(1).io.in.issue.fire      := slot1_fire
+  pipes(1).io.in.issue.rdy_stage := MuxCase(
+    byp_res(1).delay + slot(1).bits.inst_delay,
+    Seq(
+      data_dep_internal                 -> (1.U(2.W) + slot(1).bits.inst_delay),
+      (lsu_delay && slot(1).bits.isLSU) -> 2.U(2.W),
+      (mul_delay && slot(1).bits.isMUL) -> 2.U(2.W)
+    )
+  )
 
-// TODO: CSR
-  rf.io.wr(0).wen   := pipe0.io.out.wb.wen && pipe0.io.out.wb.commit
-  rf.io.wr(0).waddr := pipe0.io.out.wb.rdIdx
-  rf.io.wr(0).wdata := pipe0.io.out.wb.result
+  rf.io.wr(0).wen   := pipes(0).io.out.wb.info.wen && pipes(0).io.out.wb.commit
+  rf.io.wr(0).waddr := pipes(0).io.out.wb.rdIdx
+  rf.io.wr(0).wdata := pipes(0).io.out.wb.result
 
-  rf.io.wr(1).wen   := pipe1.io.out.wb.wen && pipe1.io.out.wb.commit
-  rf.io.wr(1).waddr := pipe1.io.out.wb.rdIdx
-  rf.io.wr(1).wdata := pipe1.io.out.wb.result
+  rf.io.wr(1).wen   := pipes(1).io.out.wb.info.wen && pipes(1).io.out.wb.commit
+  rf.io.wr(1).waddr := pipes(1).io.out.wb.rdIdx
+  rf.io.wr(1).wdata := pipes(1).io.out.wb.result
 
   // EXU 0
   io.out.op(0)       := slot_op(0)
-  io.out.op(0).valid := pipe0.io.in.issue.fire
+  io.out.op(0).valid := pipes(0).io.in.issue.fire && !slot(0).bits.illegal
 
   // EXU 1
   io.out.op(1)       := slot_op(1)
-  io.out.op(1).valid := pipe1.io.in.issue.fire
+  io.out.op(1).valid := pipes(1).io.in.issue.fire && !slot(1).bits.illegal
 
   // LSU
-  val slot0_issue_lsu = slot(0).bits.isLSU && slot0_fire
-  val slot1_issue_lsu = slot(1).bits.isLSU && slot1_fire
+  val issue_slot0_lsu =
+    slot(0).bits.isLSU && slot0_fire && pipes(0).io.in.issue.rdy_stage(0) && !pipes(0).io.in.issue.except.valid
+  val issue_slot1_lsu =
+    slot(1).bits.isLSU && slot1_fire && pipes(1).io.in.issue.rdy_stage(0) && !pipes(1).io.in.issue.except.valid
+  val issue_lsu_op    = Wire(new OpInfo)
+  issue_lsu_op       := Mux(issue_slot0_lsu, slot_op(0), slot_op(1))
+  issue_lsu_op.valid := (issue_slot0_lsu || issue_slot1_lsu) && !e1_trap && !e2_trap && !wb_trap && ~io.in.irq
 
-  val lsu_op = Mux(slot0_issue_lsu, slot_op(0), slot_op(1))
-  io.out.op(2)       := lsu_op
-  io.out.op(2).valid := lsu_op.valid && ~io.in.irq && (slot0_issue_lsu || slot1_issue_lsu)
+  val mispred      = Wire(Bool())
+  val e1_slot0_lsu = pipe_e1(0).isMem && pipe_e1(0).rdy_stage(1) && pipe_e1(0).commit && !pipe_e1(0).except.valid
+  val e1_slot1_lsu =
+    pipe_e1(1).isMem && pipe_e1(1).rdy_stage(1) && pipe_e1(1).commit && !pipe_e1(1).except.valid && !slot1_mismatch
+  val e1_lsu_op    = Wire(new OpInfo)
+  e1_lsu_op       := Mux(e1_slot1_lsu, OpInfo.fromPipe(pipe_e1(1)), OpInfo.fromPipe(pipe_e1(0)))
+  e1_lsu_op.valid := (e1_slot0_lsu || e1_slot1_lsu) && !e2_trap && !wb_trap
+
+  io.out.op(2) := Mux(e1_lsu_op.valid, e1_lsu_op, issue_lsu_op)
 
   // MUL
-  val slot0_issue_mul = slot(0).bits.isMUL && slot0_fire
-  val slot1_issue_mul = slot(1).bits.isMUL && slot1_fire
+  val issue_slot0_mul =
+    slot(0).bits.isMUL && slot0_fire && pipes(0).io.in.issue.rdy_stage(0) && !pipes(0).io.in.issue.except.valid
+  val issue_slot1_mul =
+    slot(1).bits.isMUL && slot1_fire && pipes(1).io.in.issue.rdy_stage(0) && !pipes(1).io.in.issue.except.valid
 
-  val mul_op = Mux(slot0_issue_mul, slot_op(0), slot_op(1))
-  io.out.op(3)       := mul_op
-  io.out.op(3).valid := mul_op.valid && ~io.in.irq && (slot0_issue_mul || slot1_issue_mul)
+  val issue_mul_op = Wire(new OpInfo)
+  issue_mul_op       := Mux(issue_slot0_mul, slot_op(0), slot_op(1))
+  issue_mul_op.valid := (issue_slot0_mul || issue_slot1_mul) && ~io.in.irq
+
+  val e1_slot0_mul = pipe_e1(0).isMul && pipe_e1(0).rdy_stage(1) && pipe_e1(0).commit && !pipe_e1(0).except.valid
+  val e1_slot1_mul =
+    pipe_e1(1).isMul && pipe_e1(1).rdy_stage(1) && pipe_e1(1).commit && !pipe_e1(1).except.valid && !slot1_mismatch
+
+  val e1_mul_op = Wire(new OpInfo)
+  e1_mul_op       := Mux(e1_slot1_mul, OpInfo.fromPipe(pipe_e1(1)), OpInfo.fromPipe(pipe_e1(0)))
+  e1_mul_op.valid := e1_slot0_mul || e1_slot1_mul
+
+  io.out.op(3) := Mux(e1_mul_op.valid, e1_mul_op, issue_mul_op)
 
   // DIV
   io.out.op(4)       := slot_op(0)
-  io.out.op(4).valid := pipe0.io.in.issue.fire && slot(0).bits.isDIV
+  io.out.op(4).valid := pipes(0).io.in.issue.fire && slot(0).bits.isDIV && !pipes(0).io.in.issue.except.valid
 
   val div_pending_q = RegInit(false.B)
-  when(pipe0.io.in.flush || pipe1.io.in.flush) {
+  when(pipes(0).io.in.e1_flush || pipes(1).io.in.e1_flush) {
     div_pending_q := false.B
   }.elsewhen(io.out.op(4).valid) {
     div_pending_q := true.B
@@ -252,28 +350,84 @@ class CL3Issue extends Module with CL3Config {
   div_pending := div_pending_q
 
   // CSR
-  io.out.op(5)       := slot_op(0)
-  io.out.op(5).valid := slot_op(0).valid && ~io.in.irq && slot(0).bits.isCSR
+  val csr_pending_q = RegInit(false.B)
+  when(io.in.csr.br.valid) {
+    csr_pending_q := false.B
+  }.elsewhen(io.out.op(5).valid) {
+    csr_pending_q := true.B
+  }.elsewhen(pipes(0).io.out.wb.commit) {
+    csr_pending_q := false.B
+  }
+  csr_pending := csr_pending_q
 
-  dual_issue   := pipe1.io.in.issue.fire && !io.in.irq
-  single_issue := pipe0.io.in.issue.fire && !dual_issue && !io.in.irq
+  io.out.op(5)       := slot_op(0)
+  io.out.op(5).valid := pipes(0).io.in.issue.fire && ~io.in.irq && slot(0).bits.isCSR && !pipes(
+    0
+  ).io.in.issue.except.valid
+
+  dual_issue   := pipes(1).io.in.issue.fire && !io.in.irq
+  single_issue := pipes(0).io.in.issue.fire && !dual_issue && !io.in.irq
+
+  // EXEC2
+  io.out.op(6)       := OpInfo.fromPipe(pipe_e1(0))
+  io.out.op(6).valid := pipe_e1(0).isALU && pipe_e1(0).rdy_stage(0)
+
+  // EXEC3
+  io.out.op(7)       := OpInfo.fromPipe(pipe_e1(1))
+  io.out.op(7).valid := pipe_e1(1).isALU && pipe_e1(1).rdy_stage(1)
 
   // Branch
+
+  val single_issue_q = RegInit(false.B)
+  single_issue_q := Mux(single_issue, true.B, false.B)
+
+  val dual_issue_q = RegInit(false.B)
+  dual_issue_q := Mux(dual_issue, true.B, false.B)
+
+  pc_q := PriorityMux(
+    Seq(
+      io.in.csr.br.valid                       -> io.in.csr.br.pc,
+      io.out.br.valid                          -> io.out.br.pc,
+      (io.in.exec(0).br.valid && dual_issue)   -> (fetch1.bits.pc + 4.U),
+      (io.in.exec(0).br.valid && single_issue) -> io.in.exec(0).br.pc,
+      io.in.exec(1).br.valid                   -> io.in.exec(1).br.pc,
+      dual_issue                               -> (pc_q + 8.U),
+      single_issue                             -> (pc_q + 4.U),
+      true.B                                   -> pc_q
+    )
+  )
+
+  val slot1_pc_q = RegEnable(fetch1.bits.pc, 0.U(32.W), dual_issue)
+
+  val slot1_pc_actual =
+    Mux(io.in.exec(0).bp.valid && io.in.exec(0).bp.isTaken, io.in.exec(0).bp.target, io.in.exec(0).bp.source + 4.U)
+
+  val slot0_mismatch = (pc_q =/= fetch0.bits.pc) && fetch0.valid
+  slot1_mismatch := (slot1_pc_q =/= slot1_pc_actual) && dual_issue_q
+
+  slot0_is_trap := pipe_e1(0).isTrap
+
+  val next_pc = Mux(slot1_mismatch, slot1_pc_actual, pc_q)
+
+  mispred := slot1_mismatch || slot0_mismatch
+
+  io.out.lsu_flush := (slot1_mismatch || slot0_is_trap) && pipe_e1(1).isMem && pipe_e1(1).rdy_stage(0)
+
   io.out.br.valid := mispred || io.in.csr.br.valid
-  io.out.br.pc    := Mux(io.in.csr.br.valid, io.in.csr.br.pc, pc_q)
-  io.out.br.priv  := Mux(io.in.csr.br.valid, io.in.csr.br.priv, priv_q)
+  io.out.br.pc    := Mux(io.in.csr.br.valid, io.in.csr.br.pc, next_pc)
+  io.out.br.priv  := Mux(io.in.csr.br.valid, io.in.csr.br.priv, 3.U) // TODO:
 
-  io.out.bp       := Mux(pipe_e1(1).isBr || pipe_e1(1).isJmp, io.in.exec(1).bp, io.in.exec(0).bp)
+  io.out.bp := Mux(pipe_e1(1).isBr || pipe_e1(1).isJmp, io.in.exec(1).bp, io.in.exec(0).bp)
 
-  io.out.csr.waddr  := pipe0.io.out.wb.csr.waddr
-  io.out.csr.wdata  := pipe0.io.out.wb.csr.wdata
-  io.out.csr.wen    := pipe0.io.out.wb.csr.wen
-  io.out.csr.except := 0.U // TODO:
+  io.out.csr.waddr  := pipes(0).io.out.wb.csr.waddr
+  io.out.csr.wdata  := pipes(0).io.out.wb.csr.wdata
+  io.out.csr.wen    := pipes(0).io.out.wb.csr.wen
+  io.out.csr.except := Mux(pipes(0).io.out.wb.except.valid, pipes(0).io.out.wb.except, pipes(1).io.out.wb.except)
 
   // handshake
 
-  io.in.fetch(0).ready := (fetch0_ok && pipe0.io.in.issue.fire) && !io.in.irq
-  io.in.fetch(1).ready := (fetch1_ok && !fetch0_ok && pipe0.io.in.issue.fire || pipe1.io.in.issue.fire) && !io.in.irq
+  io.in.fetch(0).ready := (fetch0_ok && pipes(0).io.in.issue.fire) && !io.in.irq
+  io.in.fetch(1).ready := (fetch1_ok && pipes(1).io.in.issue.fire) && !io.in.irq
 
   if (EnableDiff) {
     val difftest = Module(new Difftest)
@@ -281,23 +435,69 @@ class CL3Issue extends Module with CL3Config {
     difftest.io.clock := clock
 
     // TODO: use a more elegant way to do signal connection
-    difftest.io.diff_info(0).commit := pipe0.io.out.wb.commit
-    difftest.io.diff_info(0).pc     := pipe0.io.out.wb.pc
-    difftest.io.diff_info(0).inst   := pipe0.io.out.wb.inst
-    difftest.io.diff_info(0).skip   := !pipe0.io.out.wb.cacheable
-    difftest.io.diff_info(0).npc    := pipe0.io.out.wb.npc
-    difftest.io.diff_info(0).rdIdx  := pipe0.io.out.wb.rdIdx
-    difftest.io.diff_info(0).wen    := pipe0.io.out.wb.wen
-    difftest.io.diff_info(0).wdata  := pipe0.io.out.wb.result
+    difftest.io.diff_info(0).commit    := pipes(0).io.out.wb.commit
+    difftest.io.diff_info(0).pc        := pipes(0).io.out.wb.info.pc
+    difftest.io.diff_info(0).inst      := pipes(0).io.out.wb.info.inst
+    difftest.io.diff_info(0).skip      := !pipes(0).io.out.wb.mem.cacheable
+    difftest.io.diff_info(0).npc       := pipes(0).io.out.wb.npc
+    difftest.io.diff_info(0).rdIdx     := pipes(0).io.out.wb.rdIdx
+    difftest.io.diff_info(0).wen       := pipes(0).io.out.wb.info.wen
+    difftest.io.diff_info(0).wdata     := pipes(0).io.out.wb.result
+    difftest.io.diff_info(0).csr_wen   := pipes(0).io.out.wb.csr.wen
+    difftest.io.diff_info(0).csr_waddr := pipes(0).io.out.wb.csr.waddr
+    difftest.io.diff_info(0).csr_wdata := pipes(0).io.out.wb.csr.wdata
+    difftest.io.diff_info(0).irq_en    := pipes(0).io.out.wb.isIrq
 
-    difftest.io.diff_info(1).commit := pipe1.io.out.wb.commit
-    difftest.io.diff_info(1).pc     := pipe1.io.out.wb.pc
-    difftest.io.diff_info(1).inst   := pipe1.io.out.wb.inst
-    difftest.io.diff_info(1).skip   := !pipe1.io.out.wb.cacheable
-    difftest.io.diff_info(1).npc    := pipe1.io.out.wb.npc
-    difftest.io.diff_info(1).rdIdx  := pipe1.io.out.wb.rdIdx
-    difftest.io.diff_info(1).wen    := pipe1.io.out.wb.wen
-    difftest.io.diff_info(1).wdata  := pipe1.io.out.wb.result
+    difftest.io.diff_info(1).commit    := pipes(1).io.out.wb.commit
+    difftest.io.diff_info(1).pc        := pipes(1).io.out.wb.info.pc
+    difftest.io.diff_info(1).inst      := pipes(1).io.out.wb.info.inst
+    difftest.io.diff_info(1).skip      := !pipes(1).io.out.wb.mem.cacheable
+    difftest.io.diff_info(1).npc       := pipes(1).io.out.wb.npc
+    difftest.io.diff_info(1).rdIdx     := pipes(1).io.out.wb.rdIdx
+    difftest.io.diff_info(1).wen       := pipes(1).io.out.wb.info.wen
+    difftest.io.diff_info(1).wdata     := pipes(1).io.out.wb.result
+    difftest.io.diff_info(1).csr_wen   := pipes(1).io.out.wb.csr.wen
+    difftest.io.diff_info(1).csr_waddr := pipes(1).io.out.wb.csr.waddr
+    difftest.io.diff_info(1).csr_wdata := pipes(1).io.out.wb.csr.wdata
+    difftest.io.diff_info(1).irq_en    := pipes(1).io.out.wb.isIrq
   }
+
+  io.out.debug.fetch0_ok                 := fetch0_ok
+  io.out.debug.fetch1_ok                 := fetch1_ok
+  io.out.debug.slot0_data_check          := slot0_data_check
+  io.out.debug.slot0_struct_check        := slot0_struct_check
+  io.out.debug.slot0_order_check         := slot0_order_check
+  io.out.debug.slot1_data_check          := slot1_data_check
+  io.out.debug.slot1_order_check         := slot1_order_check
+  io.out.debug.slot1_struct_check        := slot1_struct_check
+  io.out.debug.slot1_type_check          := slot1_type_check
+  io.out.debug.slot1_data_check_internal := slot1_data_check_internal
+
+  io.out.debug.delay0       := byp_res(0).delay
+  io.out.debug.id0          := byp_res(0).id
+  io.out.debug.inst_delay0  := slot(0).bits.inst_delay
+  io.out.debug.delay1       := byp_res(1).delay
+  io.out.debug.id1          := byp_res(1).id
+  io.out.debug.inst_delay1  := slot(1).bits.inst_delay
+  io.out.debug.mismatch0    := slot0_mismatch
+  io.out.debug.mismatch1    := slot1_mismatch
+  io.out.debug.dual_issue   := dual_issue
+  io.out.debug.single_issue := single_issue
+  io.out.debug.rdystage     := pipe_e1(1).rdy_stage(1)
+  io.out.debug.pipe1mem     := pipe_e1(1).isMem
+
+  val mispred_q = RegInit(0.U(32.W))
+  when(mispred) {
+    mispred_q := mispred_q + 1.U
+  }
+  val brj_num_q = RegInit(0.U(32.W))
+  when(io.out.bp.valid) {
+    brj_num_q := brj_num_q + 1.U
+  }
+
+  io.out.debug.mispred := mispred_q
+  io.out.debug.brj_num := brj_num_q
+
+  dontTouch(io.out.debug)
 
 }

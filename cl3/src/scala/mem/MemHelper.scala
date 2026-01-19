@@ -65,8 +65,8 @@ module MemHelper(
 
 	assign sel_uart   = (req_bits_addr == 32'h10000000);
 	assign sel_finish = (req_bits_addr == 32'h1000000C);
-	assign sel_mtimel = (req_bits_addr == 32'h10000010);
-	assign sel_mtimeh = (req_bits_addr == 32'h10000014);
+	assign sel_mtimel = (req_bits_addr == 32'h0200bff8);
+	assign sel_mtimeh = (req_bits_addr == 32'h0200bffc);
 	assign uart_char  = req_bits_wdata[7:0];
 
 	always_ff @(posedge clock) begin

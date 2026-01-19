@@ -4,85 +4,79 @@ import chisel3._
 import chisel3.util._
 
 trait DecodeFIFOConfig {
-  val FIFOWidth: Int = 64
-  val FIFODepth: Int = 2
+  val FIFODepth: Int = 8
 }
 
-class DecodeFIFO() extends Module with DecodeFIFOConfig {
+class DecodeFIFO extends Module with DecodeFIFOConfig {
   val io = IO(new Bundle {
     val flush = Input(Bool())
     val in    = Flipped(Decoupled(Vec(2, Input(new DEInfo))))
     val out   = Vec(2, Decoupled(Output(new DEInfo)))
   })
 
-  class FIFOEntry() extends Bundle {
-    val info0  = new DEInfo
-    val info1  = new DEInfo
-    val valid0 = Bool()
-    val valid1 = Bool()
+  class FIFOEntry extends Bundle {
+    val info  = new DEInfo
+    val valid = Bool()
   }
 
-  val entry_vec = RegInit(VecInit(Seq.fill(FIFODepth)(0.U.asTypeOf(new FIFOEntry))))
-  val rd_ptr_q  = RegInit(0.U(1.W))
-  val wr_ptr_q  = RegInit(0.U(1.W))
-  val count_q   = RegInit(0.U(2.W))
+  val entrys   = RegInit(VecInit(Seq.fill(FIFODepth)(0.U.asTypeOf(new FIFOEntry))))
+  val rd_ptr_q = RegInit(0.U(log2Ceil(FIFODepth).W))
+  val wr_ptr_q = RegInit(0.U(log2Ceil(FIFODepth).W))
+  val count_q  = RegInit(0.U((log2Ceil(FIFODepth) + 1).W))
 
-  val is_full  = (count_q === FIFODepth.U)
-  val is_empty = (count_q === 0.U)
+  io.in.ready := ((FIFODepth.U - count_q) >= 2.U)
 
-  io.in.ready := !is_full && !io.flush
+  val head = entrys(rd_ptr_q)
 
-  val head = entry_vec(rd_ptr_q)
-
-  io.out(0).valid := !is_empty && head.valid0
-  io.out(1).valid := !is_empty && head.valid1
+  val next_ptr = rd_ptr_q +% 1.U
+  io.out(0).valid := head.valid
+  io.out(1).valid := entrys(next_ptr).valid
 
   val push = io.in.fire
   val pop0 = io.out(0).fire
   val pop1 = io.out(1).fire
 
-  // val pop_complete = !is_empty && ((pop0 && !head.valid1) || (pop1 && !head.valid0) || (pop0 && pop1))
-  val pop_complete = !is_empty && (pop1 && head.valid0 && head.valid1) || (pop0 && head.valid0 && !head.valid1) || (pop1 && !head.valid0 && head.valid1)
+  val push_num = Mux(push, Mux(io.in.bits(0).pred, 1.U, 2.U), 0.U)
+  val pop_num  = Mux(pop1, 2.U, Mux(pop0, 1.U, 0.U))
+
+  when(io.flush) {
+    for (i <- 0 until FIFODepth) {
+      entrys(i).valid := false.B
+    }
+  }.elsewhen(push) {
+    entrys(wr_ptr_q).valid := true.B
+  }
+
+  when(push && !io.flush) {
+    entrys(wr_ptr_q).info         := io.in.bits(0)
+    entrys(wr_ptr_q +% 1.U).info  := io.in.bits(1)       // TODO:
+    entrys(wr_ptr_q +% 1.U).valid := !io.in.bits(0).pred // TODO:
+  }
 
   when(io.flush) {
     wr_ptr_q := 0.U
-    for (i <- 0 until FIFODepth) {
-      entry_vec(i) := 0.U.asTypeOf(new FIFOEntry)
-    }
-
   }.elsewhen(push) {
-    entry_vec(wr_ptr_q).info0  := io.in.bits(0)
-    entry_vec(wr_ptr_q).info1  := io.in.bits(1)
-    entry_vec(wr_ptr_q).valid0 := !io.in.bits(0).dummy
-    entry_vec(wr_ptr_q).valid1 := !io.in.bits(1).dummy
-
-    wr_ptr_q := wr_ptr_q + 1.U
-  }
-
-  when(pop0) {
-    entry_vec(rd_ptr_q).valid0 := false.B
-  }
-  when(pop1) {
-    entry_vec(rd_ptr_q).valid1 := false.B
+    wr_ptr_q := wr_ptr_q +% push_num
   }
 
   when(io.flush) {
     rd_ptr_q := 0.U
-  }.elsewhen(pop_complete) {
-    rd_ptr_q := rd_ptr_q + 1.U
+  }.elsewhen(pop0 && !pop1) {
+    entrys(rd_ptr_q).valid := false.B
+    rd_ptr_q               := next_ptr
+  }.elsewhen(pop1) {
+    entrys(rd_ptr_q).valid := false.B
+    entrys(next_ptr).valid := false.B
+    rd_ptr_q               := next_ptr +% 1.U
   }
 
   when(io.flush) {
     count_q := 0.U
-  }.elsewhen(push && !pop_complete) {
-    count_q := count_q + 1.U
-  }.elsewhen(!push && pop_complete) {
-    count_q := count_q - 1.U
+  }.otherwise {
+    count_q := count_q + push_num - pop_num
   }
 
-  val rd_entry = entry_vec(rd_ptr_q)
-
-  io.out(0).bits := rd_entry.info0
-  io.out(1).bits := rd_entry.info1
+  io.out(0).bits := entrys(rd_ptr_q).info
+  io.out(1).bits := entrys(next_ptr).info
 
 }

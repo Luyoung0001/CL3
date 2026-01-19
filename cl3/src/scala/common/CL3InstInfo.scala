@@ -268,7 +268,7 @@ object CL3InstInfo {
 
     // MUL (Multiplication Instructions)
     InstructionPattern(
-      instType = "M",
+      instType = "R",
       opType = "MUL",
       name = "mul",
       func7 = BitPat("b0000001"),
@@ -276,7 +276,7 @@ object CL3InstInfo {
       opcode = BitPat("b0110011")
     ),
     InstructionPattern(
-      instType = "M",
+      instType = "R",
       opType = "MUL",
       name = "mulh",
       func7 = BitPat("b0000001"),
@@ -284,7 +284,7 @@ object CL3InstInfo {
       opcode = BitPat("b0110011")
     ),
     InstructionPattern(
-      instType = "M",
+      instType = "R",
       opType = "MUL",
       name = "mulhsu",
       func7 = BitPat("b0000001"),
@@ -292,7 +292,7 @@ object CL3InstInfo {
       opcode = BitPat("b0110011")
     ),
     InstructionPattern(
-      instType = "M",
+      instType = "R",
       opType = "MUL",
       name = "mulhu",
       func7 = BitPat("b0000001"),
@@ -302,7 +302,7 @@ object CL3InstInfo {
 
     // DIV (Division and Remainder Instructions)
     InstructionPattern(
-      instType = "M",
+      instType = "R",
       opType = "DIV",
       name = "div",
       func7 = BitPat("b0000001"),
@@ -310,7 +310,7 @@ object CL3InstInfo {
       opcode = BitPat("b0110011")
     ),
     InstructionPattern(
-      instType = "M",
+      instType = "R",
       opType = "DIV",
       name = "divu",
       func7 = BitPat("b0000001"),
@@ -318,7 +318,7 @@ object CL3InstInfo {
       opcode = BitPat("b0110011")
     ),
     InstructionPattern(
-      instType = "M",
+      instType = "R",
       opType = "DIV",
       name = "rem",
       func7 = BitPat("b0000001"),
@@ -326,7 +326,7 @@ object CL3InstInfo {
       opcode = BitPat("b0110011")
     ),
     InstructionPattern(
-      instType = "M",
+      instType = "R",
       opType = "DIV",
       name = "remu",
       func7 = BitPat("b0000001"),
@@ -336,42 +336,42 @@ object CL3InstInfo {
 
     // CSR (Control and Status Register Instructions)
     InstructionPattern(
-      instType = "CSR",
+      instType = "I",
       opType = "CSR",
       name = "csrrw",
       func3 = BitPat("b001"),
       opcode = BitPat("b1110011")
     ),
     InstructionPattern(
-      instType = "CSR",
+      instType = "I",
       opType = "CSR",
       name = "csrrs",
       func3 = BitPat("b010"),
       opcode = BitPat("b1110011")
     ),
     InstructionPattern(
-      instType = "CSR",
+      instType = "I",
       opType = "CSR",
       name = "csrrc",
       func3 = BitPat("b011"),
       opcode = BitPat("b1110011")
     ),
     InstructionPattern(
-      instType = "CSR",
+      instType = "I",
       opType = "CSR",
       name = "csrrwi",
       func3 = BitPat("b101"),
       opcode = BitPat("b1110011")
     ),
     InstructionPattern(
-      instType = "CSR",
+      instType = "I",
       opType = "CSR",
       name = "csrrsi",
       func3 = BitPat("b110"),
       opcode = BitPat("b1110011")
     ),
     InstructionPattern(
-      instType = "CSR",
+      instType = "I",
       opType = "CSR",
       name = "csrrci",
       func3 = BitPat("b111"),
@@ -380,18 +380,157 @@ object CL3InstInfo {
 
     // SYS (System Instructions)
     InstructionPattern(
-      instType = "R",
-      opType = "SYS",
+      instType = "I",
+      opType = "SYS", // TODO:
       name = "fence",
       func3 = BitPat("b000"),
       opcode = BitPat("b0001111")
     ),
     InstructionPattern(
-      instType = "PRIV",
-      opType = "SYS",
-      name = "ecall/ebreak",
+      instType = "I",
+      opType = "SYS", // TODO:
+      name = "fence.i",
+      func3 = BitPat("b001"),
+      opcode = BitPat("b0001111")
+    ),
+    InstructionPattern(
+      instType = "I",
+      opType = "CSR",
+      name = "ecall",
+      func7 = BitPat("b0000000"),
+      sysCode = BitPat("b00000"),
       func3 = BitPat("b000"),
       opcode = BitPat("b1110011")
+    ),
+    InstructionPattern(
+      instType = "I",
+      opType = "CSR",
+      name = "ebreak",
+      func7 = BitPat("b0000000"),
+      sysCode = BitPat("b00001"),
+      func3 = BitPat("b000"),
+      opcode = BitPat("b1110011")
+    ),
+    InstructionPattern(
+      instType = "I",
+      opType = "CSR",
+      name = "mret",
+      func7 = BitPat("b0011000"),
+      func3 = BitPat("b000"),
+      opcode = BitPat("b1110011")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "MUL",
+      name = "clmul",
+      func7 = BitPat("b0000101"),
+      func3 = BitPat("b001"),
+      opcode = BitPat("b0110011")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "MUL",
+      name = "clmulh",
+      func7 = BitPat("b0000101"),
+      func3 = BitPat("b011"),
+      opcode = BitPat("b0110011")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "MUL",
+      name = "clmulr",
+      func7 = BitPat("b0000101"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0110011")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "amoadd",
+      func7 = BitPat("b00000??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
+    ),
+      InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "amoswap",
+      func7 = BitPat("b00001??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType   = "ATO",
+      name     = "lr",
+      func7    = BitPat("b00010??"),
+      sysCode  = BitPat("b00000"),
+      func3    = BitPat("b010"),
+      opcode   = BitPat("b0101111")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "sc",
+      func7 = BitPat("b00011??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "amoxor",
+      func7 = BitPat("b00100??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "amoor",
+      func7 = BitPat("b01000??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "amoand",
+      func7 = BitPat("b01100??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "amomin",
+      func7 = BitPat("b10000??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "amomax",
+      func7 = BitPat("b10100??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "amominu",
+      func7 = BitPat("b11000??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
+    ),
+    InstructionPattern(
+      instType = "R",
+      opType = "ATO",
+      name = "amomaxu",
+      func7 = BitPat("b11100??"),
+      func3 = BitPat("b010"),
+      opcode = BitPat("b0101111")
     )
   )
 
@@ -406,7 +545,8 @@ object CL3InstInfo {
     MULField,
     DIVField,
     CSRField,
-    BRField
+    BRField,
+    ATOField
   )
 
 }

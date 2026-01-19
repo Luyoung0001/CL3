@@ -22,7 +22,10 @@ class CL3RFIO() extends Bundle {
 class CL3RF extends Module {
   val io = IO(new CL3RFIO)
 
-  val regs = RegInit(VecInit(Seq.fill(32)(0.U(32.W))))
+  // val regs = RegInit(VecInit(Seq.fill(32)(0.U(32.W))))
+  val regs = RegInit(VecInit(Seq.tabulate(32) { i =>
+    if (i == 11) "h80fff9f0".U(32.W) else 0.U(32.W)
+  }))
 
   val conflict = io.wr(1).wen && (io.wr(1).waddr === io.wr(0).waddr)
 
