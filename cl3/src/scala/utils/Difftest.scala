@@ -15,6 +15,7 @@ class DiffInfo extends Bundle {
   val csr_wen   = Bool()
   val csr_wdata = UInt(32.W)
   val csr_waddr = UInt(12.W)
+  val irq_en    = Bool()
 
 }
 

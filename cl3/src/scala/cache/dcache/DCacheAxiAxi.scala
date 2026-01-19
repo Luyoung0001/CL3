@@ -47,7 +47,7 @@ class dcache_axi_axi(p: DCacheParams) extends Module {
 //-------------------------------------------------------------
 // Write burst tracking
 //-------------------------------------------------------------
-  val req_cnt_q = RegInit(0.U(p.lenW.W))
+  val req_cnt_q = RegInit(0.U(p.axi.axiLenBits.W))
   when(out_aw.fire) {
     when(~out_w.ready && !wvalid_inhibit_q) {
       req_cnt_q := out_aw.bits.len + 1.U

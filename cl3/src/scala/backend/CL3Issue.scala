@@ -446,6 +446,7 @@ class CL3Issue extends Module with CL3Config {
     difftest.io.diff_info(0).csr_wen   := pipes(0).io.out.wb.csr.wen
     difftest.io.diff_info(0).csr_waddr := pipes(0).io.out.wb.csr.waddr
     difftest.io.diff_info(0).csr_wdata := pipes(0).io.out.wb.csr.wdata
+    difftest.io.diff_info(0).irq_en    := pipes(0).io.out.wb.isIrq
 
     difftest.io.diff_info(1).commit    := pipes(1).io.out.wb.commit
     difftest.io.diff_info(1).pc        := pipes(1).io.out.wb.info.pc
@@ -458,6 +459,7 @@ class CL3Issue extends Module with CL3Config {
     difftest.io.diff_info(1).csr_wen   := pipes(1).io.out.wb.csr.wen
     difftest.io.diff_info(1).csr_waddr := pipes(1).io.out.wb.csr.waddr
     difftest.io.diff_info(1).csr_wdata := pipes(1).io.out.wb.csr.wdata
+    difftest.io.diff_info(1).irq_en    := pipes(1).io.out.wb.isIrq
   }
 
   io.out.debug.fetch0_ok                 := fetch0_ok

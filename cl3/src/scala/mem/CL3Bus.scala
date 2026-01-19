@@ -39,7 +39,9 @@ class CL3ICacheIO extends Bundle {
   val resp = Flipped(Valid(new CL3ICacheResp))
 }
 
-class CL3DCacheReq extends SimpleMemReq(32) {}
+class CL3DCacheReq extends SimpleMemReq(32) {
+  val atomic = new AtomicInfo
+}
 
 class CL3DCacheResp extends SimpleMemResp(32) {}
 

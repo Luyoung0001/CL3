@@ -43,7 +43,7 @@ class CL3Core extends Module with CL3Config {
   csr.io.in.hold     := issue.io.out.hold
   mmu.io.ctrl        := DontCare //TODO:
 
-  csr.io.in.irq_e     := false.B // TODO:
+  csr.io.in.irq_e     := io.ext_irq // TODO:
   csr.io.in.irq_t   := io.timer_irq
   csr.io.in.irq_inhibit := false.B
   issue.io.in.irq       := csr.io.out.irq

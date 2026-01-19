@@ -33,17 +33,17 @@ class CpuMemPort(p: DCacheParams) extends Bundle {
 class PMemReq(p: DCacheParams) extends Bundle {
   val wr    = Bool()
   val valid = Bool()
-  val len   = UInt(p.lenW.W)
+  val len   = UInt(p.axi.axiLenBits.W)
   val addr  = UInt(p.addrW.W)
-  val id    = UInt(p.idW.W)
-  val burst = UInt(p.burstW.W)
+  val id    = UInt(p.axi.axiIdBits.W)
+  val burst = UInt(p.axi.axiBurstBits.W)
 
 }
 
 class PMemReqAxi(p: DCacheParams) extends Bundle {
   val wr        = UInt(p.wstrbW.W)
   val rd        = Bool()
-  val len       = UInt(p.lenW.W)
+  val len       = UInt(p.axi.axiLenBits.W)
   val addr      = UInt(p.addrW.W)
   val writeData = UInt(p.dataW.W)
 
@@ -95,9 +95,9 @@ class DCachePmemMuxIO(p: DCacheParams) extends Bundle {
 
 // DCache Core
 class DCacheCoreIO(p: DCacheParams) extends Bundle {
-  val cpu  = new CpuMemPort(p)
-  val pmem = Flipped(new PMemPortAxi(p))
-  val amo  = new AmoBundle()
+  val cpu    = new CpuMemPort(p)
+  val pmem   = Flipped(new PMemPortAxi(p))
+  val atomic = Input(new AtomicInfo())
 }
 
 // DCache_if_pmem
@@ -109,16 +109,31 @@ class DCacheIfPMemIO(p: DCacheParams) extends Bundle {
 // Tag RAM
 class TagRamPort0(p: DCacheParams)    extends Bundle {
   val addr  = Input(UInt(p.tagIdxW.W))
-  val rdata = Output(UInt(p.tagEntryW.W))
+  val rdata = Output(UInt((p.tagEntryW - 1).W))
 }
 class TagRamPort1(p: DCacheParams)    extends Bundle {
   val addr  = Input(UInt(p.tagIdxW.W))
-  val wdata = Input(UInt(p.tagEntryW.W))
+  val wdata = Input(UInt((p.tagEntryW - 1).W))
   val wen   = Input(Bool())
 }
 class DCacheTagRamIO(p: DCacheParams) extends Bundle {
   val p0 = new TagRamPort0(p)
   val p1 = new TagRamPort1(p)
+}
+
+// Dirty RAM (valid/dirty bits split version)
+class DirtyRamPort0(p: DCacheParams) extends Bundle {
+  val addr  = Input(UInt(p.tagIdxW.W))
+  val rdata = Output(Bool())
+}
+class DirtyRamPort1(p: DCacheParams) extends Bundle {
+  val addr  = Input(UInt(p.tagIdxW.W))
+  val wdata = Input(Bool())
+  val wen   = Input(Bool())
+}
+class DCacheDirtyRamIO(p: DCacheParams) extends Bundle {
+  val p0 = new DirtyRamPort0(p)
+  val p1 = new DirtyRamPort1(p)
 }
 
 // Data RAM
@@ -145,9 +160,9 @@ class DCacheAxitoAXiIO(p: DCacheParams) extends Bundle {
 }
 
 class DCacheTopIO(p: DCacheParams) extends Bundle {
-  val cpu = new CpuMemPort(p)
-  val axi = new Axi4MasterIO(p.axi)
-  val amo = new AmoBundle()
+  val cpu    = new CpuMemPort(p)
+  val axi    = new Axi4MasterIO(p.axi)
+  val atomic = Input(new AtomicInfo())
 }
 
 class DCacheAxiFifoIO(WIDTH: Int, DEPTH: Int, ADDR_W: Int) extends Bundle {
@@ -161,25 +176,25 @@ class DCacheAxiFifoIO(WIDTH: Int, DEPTH: Int, ADDR_W: Int) extends Bundle {
 }
 
 object amoOp extends ChiselEnum {
-  val AMOSWAP = Value(0.U)
-  val AMOADD  = Value(1.U)
-  val AMOXOR  = Value(2.U)
-  val AMOAND  = Value(3.U)
-  val AMOOR   = Value(4.U)
-  val AMOMIN  = Value(5.U)
-  val AMOMAX  = Value(6.U)
-  val AMOMINU = Value(7.U)
-  val AMOMAXU = Value(8.U)
+  val AMONONE = Value("b0000".U)
+  val AMOSWAP = Value("b0010".U)
+  val AMOADD  = Value("b0011".U)
+  val AMOXOR  = Value("b0100".U)
+  val AMOAND  = Value("b0101".U)
+  val AMOOR   = Value("b0110".U)
+  val AMOMIN  = Value("b0111".U)
+  val AMOMAX  = Value("b1000".U)
+  val AMOMINU = Value("b1001".U)
+  val AMOMAXU = Value("b1010".U)
 }
 
-class AmoBundle extends Bundle {
-  val isAmo     = Input(Bool())
-  val isLR      = Input(Bool())
-  val isSC      = Input(Bool())
-  val amoCode   = Input(amoOp())
+class AtomicInfo extends Bundle {
+  val isAmo     = Bool()
+  val isLR      = Bool()
+  val isSC      = Bool()
+  val amoCode   = amoOp()
   // val aq    = Input(Bool()) // ooo
   // val rl    = Input(Bool())
-  val scSuccess = Output(Bool())
 }
 
 case class WB(p: DCacheParams) {

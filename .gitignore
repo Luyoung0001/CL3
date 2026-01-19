@@ -19,6 +19,8 @@ build/
 !utils/**
 !sw/common/linker.ld
 
+utils/bin/
+utils/dts/
 # mill
 out/
 .bsp/

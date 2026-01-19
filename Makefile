@@ -14,7 +14,18 @@ BUILD_DIR := ./build/$(VCC)
 VSRC_DIR  := ./vsrc
 WAVE_DIR  := ./wave
 CPUTOP    := CL3Top
-DUMP_WAVE =
+DUMP_WAVE ?=
+LIGHTSSS  ?= 1
+
+DUMP_START ?= 37000000
+DUMP_STOP  ?= 38000000
+LIGHTSSS_INTERVAL ?= 100000
+
+ifneq ($(strip $(DUMP_WAVE)),)
+  ifneq ($(strip $(LIGHTSSS)),)
+    $(error DUMP_WAVE and LIGHTSSS are mutually exclusive. Please enable only one.)
+  endif
+endif
 
 RTLSRC_CPU  		:= $(VSRC_DIR)/$(CPUTOP).sv
 
@@ -49,6 +60,9 @@ clean:
 	$(RM) ./build
 	$(RM) $(VSRC_DIR)
 
+test:
+	$(MILL) -i $(PRJ).test
+
 .PHONY: $(RTLSRC_CPU)
 
 -include ./soc/soc.mk
@@ -66,8 +80,10 @@ ifeq ($(VCC), verilator)
 	--Wno-lint --Wno-UNOPTFLAT --Wno-BLKANDNBLK --Wno-COMBDLY --Wno-MODDUP \
 	./cl3/src/cc/verilator/main.cpp \
 	./cl3/src/cc/verilator/difftest.cpp \
+	./cl3/src/cc/verilator/verilated_hooks.cpp \
+	./cl3/src/cc/verilator/lightsss.cpp \
 	./cl3/src/cc/perf.cpp \
-	-CFLAGS -I$(abspath ./cl3/src/cc/verilator/include) -DUSE_VERILATOR \
+	-CFLAGS "-I$(abspath ./cl3/src/cc/verilator/include) -DVL_USER_FATAL" -DUSE_VERILATOR \
 	--timescale 1ns/1ps \
 	--autoflush \
 	--trace --trace-fst \
@@ -106,22 +122,42 @@ $(BIN): $(RTLSRC_CPU) $(RTLSRC_PERIP) $(RTLSRC_INTERCON) $(RTLSRC_TOP)
 
 bin: $(BIN)
 
-REF ?= ./utils/csr-spike-so
-WAVE_TYPE ?= fst
-RUN_ARGS += +firmware=$(IMAGE).mem
+REF ?= ./utils/-spike-so
+WAVE_TYPE := $(if $(filter $(VCC),vcs),fsdb,fst)
+
+RESET_VECTOR := 0x80000000
+SRAM_MSIZE   := 0x01000000
+RAM_END      := 0x81000000
+DTB          := utils/dts/cl3.dtb
+DTB_LEN  := $(shell stat -c%s $(DTB))
+DTB_ADDR := $(shell python3 -c 'ram_end=int("$(RAM_END)",16); dtb_len=int("$(DTB_LEN)"); addr=(ram_end-dtb_len)&~0xF; print("0x%08x"%addr)')
 
 RUN_ARGS += --diff
 RUN_ARGS += --ref=$(REF)
-RUN_ARGS += --image=$(IMAGE).bin
 
-ifeq ($(VCC),vcs)
-	RUN_ARGS += +ref=$(REF)
-	RUN_ARGS += +image=$(IMAGE).bin
-else ifeq ($(VCC),verilator)
-	RUN_ARGS += --diff
-	RUN_ARGS += --ref=$(REF)
-	RUN_ARGS += --image=$(IMAGE).bin
+ifneq ($(strip $(LIGHTSSS)),)
+RUN_ARGS += --lightsss
+RUN_ARGS += --fork-interval=$(LIGHTSSS_INTERVAL)
+else ifneq ($(strip $(DUMP_WAVE)),)
+RUN_ARGS += +dump_start=$(DUMP_START)
+RUN_ARGS += +dump_stop=$(DUMP_STOP)
 endif
+
+RUN_ARGS += --image=$(IMAGE).bin
+RUN_ARGS += +firmware=$(IMAGE).mem
+RUN_ARGS += +dtb_addr=$(DTB_ADDR)
+RUN_ARGS += +dtbmem=./utils/dts/cl3Dtb.mem
+
+# RUN_ARGS += --image=./utils/bin/Image
+# RUN_ARGS += +firmware=./utils/bin/Image.mem
+# ifeq ($(VCC),vcs)
+# 	RUN_ARGS += +ref=$(REF)
+# 	RUN_ARGS += +image=$(IMAGE).bin
+# else ifeq ($(VCC),verilator)
+# 	RUN_ARGS += --diff
+# 	RUN_ARGS += --ref=$(REF)
+# 	RUN_ARGS += --image=$(IMAGE).bin
+# endif
 
 
 ifneq ($(DUMP_WAVE),)

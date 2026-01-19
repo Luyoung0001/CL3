@@ -67,9 +67,9 @@ class DCacheTagRamMacro(p: DCacheParams) extends Module {
   val banks     = p.banks
   val sramBanks = Seq.fill(banks)(
     Module(
-      new S55NLLG1PH_X32Y2D21(
-        addrBits = p.tagIdxW,
-        dataBits = p.tagEntryW
+      new S55NLLG1PH_X64Y1D20(
+        addrBits = p.tagIdxW-2,
+        dataBits = p.tagEntryW-1
       )
     )
   )

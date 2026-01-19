@@ -43,23 +43,30 @@ class ICacheTagRamDev(p: ICacheParams) extends Module {
     rdata := doutVec(bank_reg)
     port(i).dout := rdata
   }
-  // val mem   = SyncReadMem(1 << p.tagRamIdxBits, UInt(p.tagRamDataBits.W))
-  // val rdata = mem.read(io.addr, true.B)
-  // val r_q   = rdata
-
-  // when (io.wr) {
-  //     mem.write(io.addr, io.din)
-  // }
-  // io.dout := r_q
 }
 
-// class ICacheTagRam(p: ICacheParams)
-//     extends Module {
-//   val io = IO(new DualPortICTagRamIO(p))
+class ICacheValidRam(p: ICacheParams) extends Module {
+  val io = IO(new DualPortICValidRamIO(p))
 
-//   val m = Module(new ICacheTagRamDev(p))
-//   m.io <> io
-// }
+  val mem = RegInit(VecInit(Seq.fill(p.numLines)(false.B)))
+
+  when (io.flush) {
+    for (i <- 0 until p.numLines) {
+      mem(i) := false.B
+    }
+  }
+  
+  io.p0.dout := RegNext(Mux(io.p0.wr, io.p0.din, mem(io.p0.addr)))
+  io.p1.dout := RegNext(Mux(io.p1.wr, io.p1.din, mem(io.p1.addr)))
+
+  when (io.p0.wr) { mem(io.p0.addr) := io.p0.din }
+  when (io.p1.wr) { mem(io.p1.addr) := io.p1.din }
+  
+  when (io.p0.wr && io.p1.wr) {
+    assert(io.p0.addr =/= io.p1.addr, "ValidRam: dual write same address")
+  }
+}
+
 
 class ICacheTagRam(p: ICacheParams) extends Module {
   val io = IO(new DualPortICTagRamIO(p))

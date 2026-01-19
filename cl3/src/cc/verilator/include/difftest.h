@@ -133,11 +133,15 @@
 #define MTVAL   0x343
 
 // EXCEPTION Registers
-#define MEPC_R    (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mepc_q)
-#define MTVEC_R   (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mtvec_q)
-#define MCAUSE_R  (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mcause_q)
-#define MSTATUS_R (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_sr_q)
-#define MTVAL_R   (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mtval_q)
+#define MEPC_R     (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mepc_q)
+#define MTVEC_R    (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mtvec_q)
+#define MCAUSE_R   (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mcause_q)
+#define MSTATUS_R  (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_sr_q)
+#define MTVAL_R    (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mtval_q)
+#define MIP_R      (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mip_q)
+#define MIE_R      (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mie_q)
+#define MSCRATCH_R (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mscratch_q)
+#define MPRIV_R    (topp->rootp->top__DOT__soc_top_u__DOT__u_CL3Top__DOT__core__DOT__csr__DOT__csr_rf__DOT__csr_mpriv_q)
 
 #define GET_ALL_CSR do { \
   dut.csr[0] = MEPC_R; \
@@ -145,6 +149,10 @@
   dut.csr[2] = MTVEC_R; \
   dut.csr[3] = MSTATUS_R; \
   dut.csr[4] = MTVAL_R; \
+  dut.csr[5] = MIP_R; \
+  dut.csr[6] = MIE_R; \
+  dut.csr[7] = MSCRATCH_R; \
+  dut.csr[8] = MPRIV_R; \ 
 } while(0);
 
 enum { DIFFTEST_TO_DUT, DIFFTEST_TO_REF };
@@ -157,37 +165,39 @@ typedef struct context {
 } core_context_t;
 
 // Note: The layout of this struct must be kept consistent with the SystemVerilog definition.
-#pragma pack(push, 1)
-typedef struct _diff_info_t {
-  uint16_t csr_waddr;
-  uint32_t csr_wdata;
-  uint16_t csr_wen;
-  uint16_t skip;
-  uint16_t commit;
-  uint32_t wdata;
-  uint16_t wen;
-  uint16_t rdIdx;
-  uint32_t inst;
-  uint32_t npc;
-  uint32_t pc;
-} difftest_info_t; 
-#pragma pack(pop)
-
 // #pragma pack(push, 1)
-// typedef struct {
-//   uint32_t pc;
-//   uint32_t npc;
-//   uint32_t inst;
-//   uint16_t rdIdx;
-//   uint16_t wen;
-//   uint32_t wdata;
-//   uint16_t commit;
-//   uint16_t skip;
-//   uint16_t csr_wen;
-//   uint32_t csr_wdata;
+// typedef struct _diff_info_t {
+//   uint16_t irq_en;
 //   uint16_t csr_waddr;
-// } difftest_info_t;
+//   uint32_t csr_wdata;
+//   uint16_t csr_wen;
+//   uint16_t skip;
+//   uint16_t commit;
+//   uint32_t wdata;
+//   uint16_t wen;
+//   uint16_t rdIdx;
+//   uint32_t inst;
+//   uint32_t npc;
+//   uint32_t pc;
+// } difftest_info_t; 
 // #pragma pack(pop)
+
+#pragma pack(push, 1)
+typedef struct {
+  uint32_t pc;
+  uint32_t npc;
+  uint32_t inst;
+  uint16_t rdIdx;
+  uint16_t wen;
+  uint32_t wdata;
+  uint16_t commit;
+  uint16_t skip;
+  uint16_t csr_wen;
+  uint32_t csr_wdata;
+  uint16_t csr_waddr;
+  uint16_t irq_en;
+} difftest_info_t;
+#pragma pack(pop)
 
 // _Static_assert(sizeof(difftest_info_t) == 36, "difftest_info_t must be 36 bytes");
 

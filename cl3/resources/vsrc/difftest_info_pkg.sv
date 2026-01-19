@@ -17,5 +17,6 @@ package difftest_pkg;
     bit [15:0] csr_wen;
     bit [31:0] csr_wdata;
     bit [15:0] csr_waddr;
+    bit [15:0] irq_en;
   } difftest_info_t;
 endpackage

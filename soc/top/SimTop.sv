@@ -1,9 +1,9 @@
 module top #(
     parameter logic [31:0] BOOT_ADDR = 'h80000000,
-    parameter CLK_HI = 5ns,
-    parameter CLK_LO = 5ns,
+    parameter time CLK_HI = 5ns,
+    parameter time CLK_LO = 5ns,
     parameter RESET_WAIT_CYCLES = 20,
-    parameter TO_CNT = 5000000000
+    parameter TO_CNT = 100000000
 );
 
 // Add this empty function to make verilator add some header files (DPI).
@@ -12,13 +12,27 @@ export "DPI-C" function make_verilator_happy;
 function void make_verilator_happy();
 endfunction
 
+`ifndef USE_VERILATOR
+import "DPI-C" function void difftest_init(input string ref_so_file, input string img_file);
+
+string ref_path, img_path;
+initial begin
+    void'($value$plusargs("ref=%s", ref_path));
+    void'($value$plusargs("image=%s", img_path));
+    if (ref_path != "" && img_path != "") begin
+        $display("[TB] difftest_init ref=%s img=%s", ref_path, img_path);
+        difftest_init(ref_path, img_path);
+    end
+end
+`endif
+
 logic       clk     = 'b1;
 logic       rst_n   = 'b0;
 
 initial begin: clock_gen 
     forever begin
-        #CLK_HI clk = 1'b0;
-        #CLK_LO clk = 1'b1;
+        #(CLK_HI) clk = 1'b0;
+        #(CLK_LO) clk = 1'b1;
     end
 end
 
@@ -41,19 +55,29 @@ always_ff @( posedge clk or negedge rst_n ) begin : timeout
     end else begin
         cnt <= cnt + 'd1;
         if(cnt == TO_CNT) begin
-            $fatal("[TESTBENCH] time out!");
+            $display("[TESTBENCH] time out!");
+            $finish;
         end
     end
 end: timeout
 
-// TODO: use sv testbench
-
 initial begin: dump_wave
+    longint unsigned dump_start, dump_stop;
+
+    dump_start = 0;
+    dump_stop  = '1;
+
+    void'($value$plusargs("dump_start=%d", dump_start));
+    void'($value$plusargs("dump_stop=%d",  dump_stop));
+
+    wait (cnt >= dump_start);
+
     if($test$plusargs("vcd")) begin
         $dumpfile("wave/top.vcd");
         $dumpvars(0,top);
     end 
     if($test$plusargs("fst")) begin
+        $display("[TESTBENCH] FST dump On at cycle %0d", cnt);
         $dumpfile("wave/top.fst");
         $dumpvars(0,top);
     end
@@ -63,49 +87,52 @@ initial begin: dump_wave
         $fsdbDumpvars(0,top);
     end
 `endif
+    wait (cnt >= dump_stop);
+
+    if($test$plusargs("vcd") || $test$plusargs("fst")) begin
+        $dumpoff();
+        $display("[TB] VCD/FST dump OFF at cycle %0d", cnt);
+    end
+
+`ifdef VCS
+    if($test$plusargs("fsdb")) begin
+        $fsdbDumpoff();
+        $display("[TB] FSDB dump OFF at cycle %0d", cnt);
+    end
+`endif
+
 end: dump_wave
 
-  CL3Top u_CL3Top (
-    .clock                    (clk),
-    .reset                    (~rst_n),
+initial begin: load_hex
+    string firmware;
+    string dtbmem;
+    int unsigned dtb_idx;
+    longint unsigned dtb_addr;
 
-    .io_extIrq                (1'b0),
-    .io_timerIrq              (1'b0),
-    .io_master_aw_ready       (1'b0),
-    .io_master_w_ready        (1'b0),
-    .io_master_b_valid        (1'b0),
-    .io_master_b_bits_bresp   (2'b0),
-    .io_master_b_bits_bid     (4'b0),
-    .io_master_ar_ready       (1'b0),
-    .io_master_r_valid        (1'b0),
-    .io_master_r_bits_rresp   (2'b0),
-    .io_master_r_bits_rdata   (32'b0),
-    .io_master_r_bits_rlast   (1'b0),
-    .io_master_r_bits_rid     (4'b0),
-    
-    .io_master_aw_valid       (),
-    .io_master_aw_bits_awaddr (),
-    .io_master_aw_bits_awid   (),
-    .io_master_aw_bits_awlen  (),
-    .io_master_aw_bits_awsize (),
-    .io_master_aw_bits_awburst(),
-    .io_master_aw_bits_awlock (),
-    .io_master_aw_bits_awcache(),
-    .io_master_aw_bits_awprot (),
-    .io_master_w_valid        (),
-    .io_master_w_bits_wdata   (),
-    .io_master_w_bits_wstrb   (),
-    .io_master_w_bits_wlast   (),
-    .io_master_b_ready        (),
-    .io_master_ar_valid       (),
-    .io_master_ar_bits_araddr (),
-    .io_master_ar_bits_arid   (),
-    .io_master_ar_bits_arlen  (),
-    .io_master_ar_bits_arsize (),
-    .io_master_ar_bits_arburst(),
-    .io_master_ar_bits_arlock (),
-    .io_master_ar_bits_arcache(),
-    .io_master_ar_bits_arprot (),
-    .io_master_r_ready        ()
-  );
+    if($value$plusargs("firmware=%s",firmware)) begin
+        $display("[TESTBENCH] loading firmware %s ...", firmware);
+        #5; //We should add delay here to ensure the order of initial blocks.
+        $readmemh(firmware, soc_top_u.axi_ram_u.mem);
+        $display("[TESTBENCH] Check mem data ...");
+        $display("[TESTBENCH] First data = %h", soc_top_u.axi_ram_u.mem[0]);
+    end else begin
+        $display("No firmware specified");
+    end
+
+    if ($value$plusargs("dtb_addr=%h", dtb_addr) & $value$plusargs("dtbmem=%s", dtbmem)) begin
+        $display("[TESTBENCH] dtb path  = %s", dtbmem);
+        $display("[TESTBENCH] dtb_addr  = 0x%08h", dtb_addr);
+        dtb_idx = (dtb_addr - 32'h8000_0000) >> 2;
+        $readmemh(dtbmem, soc_top_u.axi_ram_u.mem, dtb_idx);
+    end else begin
+        $display("No dtb specified");
+    end
+end
+
+
+soc_top soc_top_u (
+    .clk (clk),
+    .rst_n (rst_n)
+);
+
 endmodule

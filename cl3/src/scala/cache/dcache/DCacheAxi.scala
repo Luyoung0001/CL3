@@ -14,7 +14,7 @@ class dcache_axi(p: DCacheParams) extends Module {
   val req_push_w    = req.rd || req.wr.orR
   val req_data_in_w = Cat(req.len, req.rd, req.wr, req.writeData, req.addr)
 
-  val u_req = Module(new DCacheAxiFifo(WIDTH = (p.addrW + p.dataW + p.lenW + p.wstrbW + 1), DEPTH = 2, ADDR_W = 1))
+  val u_req = Module(new DCacheAxiFifo(WIDTH = (p.addrW + p.dataW + p.axi.axiLenBits + p.wstrbW + 1), DEPTH = 2, ADDR_W = 1))
   u_req.io.push_i  := req_push_w
   u_req.io.in_data := req_data_in_w
   u_req.io.pop_i   := accept_w
@@ -27,12 +27,12 @@ class dcache_axi(p: DCacheParams) extends Module {
   val req_can_issue_w = req_valid_w && res_accept_w
   val req_is_read_w   = Mux(req_can_issue_w, req_w(p.addrW + p.dataW + p.wstrbW), false.B)
   val req_is_write_w  = Mux(req_can_issue_w, !req_w(p.addrW + p.dataW + p.wstrbW), false.B)
-  val req_len_w       = req_w(p.addrW + p.dataW + p.lenW + p.wstrbW, p.addrW + p.dataW + p.wstrbW + 1)
+  val req_len_w       = req_w(p.addrW + p.dataW + p.axi.axiLenBits + p.wstrbW, p.addrW + p.dataW + p.wstrbW + 1)
 
 //-------------------------------------------------------------
 // Write burst tracking
 //-------------------------------------------------------------
-  val req_cnt_q = RegInit(0.U(p.lenW.W))
+  val req_cnt_q = RegInit(0.U(p.axi.axiLenBits.W))
 
   when(req_is_write_w && req_cnt_q === 0.U && req_len_w =/= 0.U && accept_w) {
     req_cnt_q := req_len_w - 1.U

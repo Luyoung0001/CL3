@@ -40,7 +40,7 @@ class CL3Top extends Module with CL3Config {
     dcache.io.cpu.req.invalidate := false.B
     dcache.io.cpu.req.writeback  := false.B
     dcache.io.cpu.req.flush      := false.B
-    dcache.io.amo                := DontCare
+    dcache.io.atomic             := core.io.dmem.req.bits.atomic
     dcache.io.cpu.req.reqTag     := DontCare
     // dcache.io.cpu.resp.ready := true.B
 
@@ -52,8 +52,12 @@ class CL3Top extends Module with CL3Config {
     u_arbiter.io.icache_axi <> icache.io.axi
     u_arbiter.io.dcache_axi <> dcache.io.axi
 
-    val clint = Module(new CL3CLINT)
-    val xbar  = Module(new CL3Xbar)
+    val clint  = Module(new CL3CLINT)
+    val xbar   = Module(new CL3Xbar)
+    val genIrq = Module(new RandomExtIrq)
+    genIrq.io.enable := EnableExtIntr.B
+
+    core.io.ext_irq   := genIrq.io.extIrq
     core.io.timer_irq := clint.io.irq
 
     clint.io.axi <> xbar.io.clint

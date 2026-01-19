@@ -314,9 +314,10 @@ object OpConstant extends OpConstant {}
 
 trait LSUConstant extends CSRTrapNO {
 
-  val LSU_WIDTH = 4
+  val LSU_WIDTH = 5
 
-  val LSU_LS_BIT   = LSU_WIDTH - 1
+  val LSU_A_LS_BIT = LSU_WIDTH - 1
+  val LSU_LS_BIT   = LSU_WIDTH - 2
   val LSU_SIGN_BIT = 0
   val LSU_1B       = 1
   val LSU_2B       = 2
@@ -328,15 +329,28 @@ trait LSUConstant extends CSRTrapNO {
 // signal[0]: 0 -> signed, 1 -> unsigned
 
 //TODO: support xlen = 64
-  val LSU_XXX = "b0000".U(LSU_WIDTH.W)
-  val LSU_SB  = "b1010".U(LSU_WIDTH.W)
-  val LSU_SH  = "b1100".U(LSU_WIDTH.W)
-  val LSU_SW  = "b1110".U(LSU_WIDTH.W)
-  val LSU_LB  = "b0010".U(LSU_WIDTH.W)
-  val LSU_LBU = "b0011".U(LSU_WIDTH.W)
-  val LSU_LH  = "b0100".U(LSU_WIDTH.W)
-  val LSU_LHU = "b0101".U(LSU_WIDTH.W)
-  val LSU_LW  = "b0110".U(LSU_WIDTH.W)
+  val LSU_XXX   = "b00000".U(LSU_WIDTH.W)
+  val LSU_SB    = "b01010".U(LSU_WIDTH.W)
+  val LSU_SH    = "b01100".U(LSU_WIDTH.W)
+  val LSU_SW    = "b01110".U(LSU_WIDTH.W)
+  val LSU_LB    = "b00010".U(LSU_WIDTH.W)
+  val LSU_LBU   = "b00011".U(LSU_WIDTH.W)
+  val LSU_LH    = "b00100".U(LSU_WIDTH.W)
+  val LSU_LHU   = "b00101".U(LSU_WIDTH.W)
+  val LSU_LW    = "b00110".U(LSU_WIDTH.W)
+  
+  val ATO_LR   = "b10000".U(LSU_WIDTH.W)
+  val ATO_SC   = "b10001".U(LSU_WIDTH.W)
+  val ATO_SWAP = "b10010".U(LSU_WIDTH.W)
+  val ATO_ADD  = "b10011".U(LSU_WIDTH.W)
+  val ATO_XOR  = "b10100".U(LSU_WIDTH.W)
+  val ATO_AND  = "b10101".U(LSU_WIDTH.W)
+  val ATO_OR   = "b10110".U(LSU_WIDTH.W)
+  val ATO_MIN  = "b10111".U(LSU_WIDTH.W)
+  val ATO_MAX  = "b11000".U(LSU_WIDTH.W)
+  val ATO_MINU = "b11001".U(LSU_WIDTH.W)
+  val ATO_MAXU = "b11010".U(LSU_WIDTH.W)
+
 
   val MASK_Z   = "b0000".U(4.W)
   val MASK_ALL = "b1111".U(4.W)

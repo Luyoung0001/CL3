@@ -23,7 +23,7 @@ class ICacheIO(p: ICacheParams) extends Bundle {
 }
 
 class ICacheDataRamIO(p: ICacheParams) extends Bundle {
-  val addr = Input(UInt(10.W))
+  val addr = Input(UInt(p.dataRamAddrBits.W))
   val din  = Input(UInt(p.dataRamDataBits.W))
   val wr   = Input(Bool())
   val dout = Output(UInt(p.dataRamDataBits.W))
@@ -34,6 +34,21 @@ class ICacheTagRamIO(p: ICacheParams) extends Bundle {
   val din  = Input(UInt(p.tagRamDataBits.W))
   val wr   = Input(Bool())
   val dout = Output(UInt(p.tagRamDataBits.W))
+}
+
+class ValidRamIO(p: ICacheParams) extends Bundle {
+  val addr = Input(UInt(p.tagRamIdxBits.W))
+  val din  = Input(Bool())
+  val wr   = Input(Bool())
+  val dout = Output(Bool())
+}
+
+class DualPortICValidRamIO(p: ICacheParams) extends Bundle {
+  val flush = Input(Bool())
+  // Port A
+  val p0 = new ValidRamIO(p)
+  // Port B
+  val p1 = new ValidRamIO(p)
 }
 
 class DualPortICDataRamIO(p: ICacheParams) extends Bundle {
