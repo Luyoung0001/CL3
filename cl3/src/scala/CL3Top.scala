@@ -120,9 +120,12 @@ class CL3Top extends Module with CL3Config {
     val dmem = Module(new MemHelper)
     dmem.io.clock := clock
     dmem.io.reset := reset
-    dmem.io.req <> core.io.dmem.req
+    dmem.io.req.valid := core.io.dmem.req.valid
+    dmem.io.req.bits.connect(core.io.dmem.req.bits)
+    core.io.dmem.req.ready := dmem.io.req.ready
 
-    core.io.dmem.resp.bits  := dmem.io.resp.bits
+    core.io.dmem.resp.bits.err   := dmem.io.resp.bits.err
+    core.io.dmem.resp.bits.rdata := dmem.io.resp.bits.rdata(31, 0)
     core.io.dmem.resp.valid := dmem.io.resp.valid
     dmem.io.resp.ready      := true.B
 
