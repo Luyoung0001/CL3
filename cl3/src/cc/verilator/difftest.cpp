@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <cstdio>
 #include <cstring>
 #include <difftest.h>
@@ -64,13 +65,13 @@ static long load_file_to_pmem(const char *path, uint32_t paddr) {
   assert(path);
 
   FILE *fp = fopen(path, "rb");
-  assert(fp);
+  if (!fp) return -1;
 
   fseek(fp, 0, SEEK_END);
   long len = ftell(fp);
   fseek(fp, 0, SEEK_SET);
 
-  // 边界检查：不能越过 pmem
+  // Boundary check: cannot exceed pmem window.
   if ((uint64_t)paddr < (uint64_t)RESET_VECTOR ||
       (uint64_t)paddr + (uint64_t)len > (uint64_t)RESET_VECTOR + (uint64_t)PMEM_SIZE) {
     fclose(fp);
@@ -161,16 +162,28 @@ void difftest_init(const Vtop *p, const char *ref_so_file,
   size_t size = load_img(img_file);
   ref_difftest_memcpy(RESET_VECTOR, mem, size, DIFFTEST_TO_REF);
 
-  char *dtb_file = "/home/chen/Templates/ict_project/CL3/utils/dts/cl3.dtb";
-  uint32_t DTB_ADDR = 0x80fff9f0;
-  long dtb_len = load_file_to_pmem(dtb_file, DTB_ADDR);
-  ref_difftest_memcpy(DTB_ADDR, pmem_ptr(DTB_ADDR), (size_t)dtb_len, DIFFTEST_TO_REF);
+  // Optional DTB injection for environments that provide a DTB image.
+  const char *dtb_file = getenv("CL3_DTB_FILE");
+  const uint32_t DTB_ADDR = 0x80fff9f0;
+  if (dtb_file && dtb_file[0]) {
+    long dtb_len = load_file_to_pmem(dtb_file, DTB_ADDR);
+    if (dtb_len > 0) {
+      ref_difftest_memcpy(DTB_ADDR, pmem_ptr(DTB_ADDR), (size_t)dtb_len, DIFFTEST_TO_REF);
+      ref.gpr[11] = DTB_ADDR;
+      printf("[DIFFTEST] loaded dtb: %s (%ld bytes) @ %#x\n", dtb_file, dtb_len, DTB_ADDR);
+    } else {
+      printf("[DIFFTEST] WARN: failed to load dtb from %s, continue without dtb\n", dtb_file);
+    }
+  } else {
+    printf("[DIFFTEST] dtb disabled (set CL3_DTB_FILE to enable)\n");
+  }
 
   // Initialize DUT and local REF state
   dut.pc = RESET_VECTOR;
   dut.csr[3] = 0x1800;
   ref.pc = RESET_VECTOR;
   ref.csr[3] = 0x1800;
+  // CL3 boots with a1 pointing to DTB address convention.
   ref.gpr[11] = DTB_ADDR;
 
   // Initialize remote REF state
@@ -272,9 +285,11 @@ int difftest_step(
   uint32_t *csr_wdata = arr_u32(csr_wdata_h);
   uint16_t *csr_waddr = arr_u16(csr_waddr_h);
   uint16_t *irq_en  = arr_u16(irq_en_h);
+  bool saw_commit = false;
 
   for (int i = 0; i < n; i++) {
     if (!commit[i]) continue;
+    saw_commit = true;
 
     if (skip[i] || csr_waddr[i] == 0xf12 || csr_waddr[i] == 0xf13 || irq_en[i]) {
       update_dut_state();
@@ -316,6 +331,10 @@ int difftest_step(
       return 1;
     }
 
+  }
+  // Startup/warmup cycles may have no commits yet; skip strict state check.
+  if (!saw_commit) {
+    return 0;
   }
     // printf("[DIFF][%d] irq_en=%u csr_waddr=0x%04x csr_wdata=0x%08x csr_wen=%u "
     //        "skip=%u commit=%u wdata=0x%08x wen=%u rdIdx=%u inst=0x%08x npc=0x%08x pc=0x%08x\n",
