@@ -14,7 +14,7 @@ trait CL3Config {
   val EnableAtomic  = true
   // val SimMemOption = "DPI-C"
   val SimMemOption  = "SoC"
-  val BOOT_ADDR     = "h80000000".U
+  val BOOT_ADDR     = (if (SimMemOption == "SoC") "h20000000" else "h80000000").U
 }
 
 object CL3Config extends CL3Config {}
